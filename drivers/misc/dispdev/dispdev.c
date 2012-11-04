@@ -491,7 +491,7 @@ static void init_dispdev(struct dispdev *dd, struct mcde_display_device *ddev,
 	mcde_dss_get_native_resolution(ddev,
 			&dd->config.width, &dd->config.height);
 	dd->config.format = DISPDEV_FMT_RGB565;
-	dd->config.stride = sizeof(u16) * w;
+	dd->config.stride = sizeof(u16) * dd->config.width;
 	dd->config.x = 0;
 	dd->config.y = 0;
 	dd->config.z = 0;

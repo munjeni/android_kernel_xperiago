@@ -690,7 +690,8 @@ static int __init handle_display_devices_in_u8500(void)
 	 if (display_initialized_during_boot)
 		((struct panel_platform_data *)panel_display0.
 		base.dev.platform_data)->skip_init = true;
-	 */
+	*/
+
 	ret = mcde_display_device_register(&panel_display0.base);
 	if (ret)
 		pr_warning("Failed to register display device 0\n");
@@ -718,7 +719,7 @@ static int __init handle_display_devices_in_u9540(void)
 #endif*/
 
 	/* Set powermode to STANDBY if startup graphics is executed */
-	/*if (display_initialized_during_boot)
+	if (display_initialized_during_boot)
 		sony_acx424akp_display0.power_mode = MCDE_DISPLAY_PM_ON;
 
 	/* MCDE pixelfetchwtrmrk levels per overlay */

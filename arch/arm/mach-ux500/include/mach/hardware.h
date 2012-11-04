@@ -93,10 +93,16 @@ static inline bool cpu_is_u5500v21(void) { return false; }
 bool cpu_is_u8500v20(void);
 bool cpu_is_u8500v21(void);
 bool cpu_is_u8500v22(void);
+static inline bool cpu_is_u8500v20_or_later(void)
+{
+	/* Only v2+ is supported */
+	return cpu_is_u8500();
+}
 #else
 static inline bool cpu_is_u8500v20(void) { return false; }
 static inline bool cpu_is_u8500v21(void) { return false; }
 static inline bool cpu_is_u8500v22(void) { return false; }
+static inline bool cpu_is_u8500v20_or_later(void) { return false; }
 #endif
 
 #endif				/* __ASSEMBLY__ */
