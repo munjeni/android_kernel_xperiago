@@ -486,7 +486,7 @@ static void mmio_power_disable(struct mmio_platform_data *pdata)
 	if (!extra->power_enabled) {
 		dev_dbg(pdata->dev, "Board %s() Exit: camera power already"
 			" disabled, do NOT disable again!\n", __func__);
-		return 0;
+		return;
 	}
 
 	/* Disable the regulators */

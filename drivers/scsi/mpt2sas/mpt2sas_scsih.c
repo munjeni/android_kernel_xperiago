@@ -249,7 +249,7 @@ MODULE_DEVICE_TABLE(pci, scsih_pci_table);
  * Note: The logging levels are defined in mpt2sas_debug.h.
  */
 static int
-_scsih_set_debug_level(const char *val, struct kernel_param *kp)
+_scsih_set_debug_level(const char *val, const struct kernel_param *kp)
 {
 	int ret = param_set_int(val, kp);
 	struct MPT2SAS_ADAPTER *ioc;

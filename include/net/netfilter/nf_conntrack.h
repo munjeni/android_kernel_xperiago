@@ -313,7 +313,7 @@ static inline bool nf_is_loopback_packet(const struct sk_buff *skb)
 	return skb->dev && skb->skb_iif && skb->dev->flags & IFF_LOOPBACK;
 }
 
-extern int nf_conntrack_set_hashsize(const char *val, struct kernel_param *kp);
+extern int nf_conntrack_set_hashsize(const char *val, const struct kernel_param *kp);
 extern unsigned int nf_conntrack_htable_size;
 extern unsigned int nf_conntrack_max;
 extern unsigned int nf_conntrack_hash_rnd;

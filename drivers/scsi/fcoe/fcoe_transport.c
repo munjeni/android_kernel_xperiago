@@ -32,13 +32,13 @@ MODULE_AUTHOR("Open-FCoE.org");
 MODULE_DESCRIPTION("FIP discovery protocol and FCoE transport for FCoE HBAs");
 MODULE_LICENSE("GPL v2");
 
-static int fcoe_transport_create(const char *, struct kernel_param *);
-static int fcoe_transport_destroy(const char *, struct kernel_param *);
+static int fcoe_transport_create(const char *, const struct kernel_param *);
+static int fcoe_transport_destroy(const char *, const struct kernel_param *);
 static int fcoe_transport_show(char *buffer, const struct kernel_param *kp);
 static struct fcoe_transport *fcoe_transport_lookup(struct net_device *device);
 static struct fcoe_transport *fcoe_netdev_map_lookup(struct net_device *device);
-static int fcoe_transport_enable(const char *, struct kernel_param *);
-static int fcoe_transport_disable(const char *, struct kernel_param *);
+static int fcoe_transport_enable(const char *, const struct kernel_param *);
+static int fcoe_transport_disable(const char *, const struct kernel_param *);
 static int libfcoe_device_notification(struct notifier_block *notifier,
 				    ulong event, void *ptr);
 
@@ -537,7 +537,7 @@ static int libfcoe_device_notification(struct notifier_block *notifier,
  *
  * Returns: 0 for success
  */
-static int fcoe_transport_create(const char *buffer, struct kernel_param *kp)
+static int fcoe_transport_create(const char *buffer, const struct kernel_param *kp)
 {
 	int rc = -ENODEV;
 	struct net_device *netdev = NULL;
@@ -602,7 +602,7 @@ out_nodev:
  *
  * Returns: 0 for success
  */
-static int fcoe_transport_destroy(const char *buffer, struct kernel_param *kp)
+static int fcoe_transport_destroy(const char *buffer, const struct kernel_param *kp)
 {
 	int rc = -ENODEV;
 	struct net_device *netdev = NULL;
@@ -646,7 +646,7 @@ out_nodev:
  *
  * Returns: 0 for success
  */
-static int fcoe_transport_disable(const char *buffer, struct kernel_param *kp)
+static int fcoe_transport_disable(const char *buffer, const struct kernel_param *kp)
 {
 	int rc = -ENODEV;
 	struct net_device *netdev = NULL;
@@ -684,7 +684,7 @@ out_nodev:
  *
  * Returns: 0 for success
  */
-static int fcoe_transport_enable(const char *buffer, struct kernel_param *kp)
+static int fcoe_transport_enable(const char *buffer, const struct kernel_param *kp)
 {
 	int rc = -ENODEV;
 	struct net_device *netdev = NULL;

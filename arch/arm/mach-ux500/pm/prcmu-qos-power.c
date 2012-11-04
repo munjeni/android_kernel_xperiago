@@ -26,7 +26,8 @@
 
 #define ARM_THRESHOLD_FREQ 400000
 
-#define AB8500_REGU_CTRL2   0x04   /* Bank containing OPP registers */
+//munjeni - defined in include/linux/mfd/ab8500.h
+//#define AB8500_REGU_CTRL2   0x04   /* Bank containing OPP registers */
 #define AB8500_VAPESEL1_REG 0x0E   /* APE OPP 100 voltage */
 #define AB8500_VAPESEL2_REG 0x0F   /* APE OPP 50 voltage  */
 

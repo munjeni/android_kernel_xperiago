@@ -233,7 +233,7 @@ static inline void kill_final_newline(char *str)
 	return 1;		\
 } while (0)
 
-static int phram_setup(const char *val, struct kernel_param *kp)
+static int phram_setup(const char *val, const struct kernel_param *kp)
 {
 	char buf[64+12+12], *str = buf;
 	char *token[3];

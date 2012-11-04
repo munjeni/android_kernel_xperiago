@@ -303,7 +303,7 @@ int nfs_map_gid_to_group(const struct nfs_server *server, __u32 gid, char *buf, 
 /* Default cache timeout is 10 minutes */
 unsigned int nfs_idmap_cache_timeout = 600 * HZ;
 
-static int param_set_idmap_timeout(const char *val, struct kernel_param *kp)
+static int param_set_idmap_timeout(const char *val, const struct kernel_param *kp)
 {
 	char *endp;
 	int num = simple_strtol(val, &endp, 0);

@@ -61,7 +61,7 @@ MODULE_PARM_DESC(cfgports, "Set max number of ports to use");
  */
 static ushort ipath_kpiobufs;
 
-static int ipath_set_kpiobufs(const char *val, struct kernel_param *kp);
+static int ipath_set_kpiobufs(const char *val, const struct kernel_param *kp);
 
 module_param_call(kpiobufs, ipath_set_kpiobufs, param_get_ushort,
 		  &ipath_kpiobufs, S_IWUSR | S_IRUGO);
@@ -1026,7 +1026,7 @@ done:
 	return ret;
 }
 
-static int ipath_set_kpiobufs(const char *str, struct kernel_param *kp)
+static int ipath_set_kpiobufs(const char *str, const struct kernel_param *kp)
 {
 	struct ipath_devdata *dd;
 	unsigned long flags;

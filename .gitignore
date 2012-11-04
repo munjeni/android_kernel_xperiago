@@ -31,6 +31,9 @@ modules.builtin
 *.lzo
 *.patch
 *.gcno
+*.config
+*.config.old
+*.cmd
 
 #
 # Top-level generic files
@@ -82,3 +85,10 @@ GTAGS
 arch/arm/boot/compressed/lib1funcs.S
 arch/arm/boot/compressed/piggy.gzip
 arch/arm/boot/compressed/vmlinux
+
+scripts/kconfig/zconf.tab.o
+scripts/kconfig/zconf.tab.c
+scripts/kconfig/zconf.hash.c
+scripts/kconfig/lex.zconf.c
+scripts/kconfig/conf.o
+scripts/kconfig/conf

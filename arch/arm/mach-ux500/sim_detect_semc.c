@@ -47,7 +47,7 @@ static ssize_t attr_simstatus_store(
 		goto err_exit;
 
 	atomic_set(&sim_status, status);
-	pr_info("%s called, sim status %d\n", __func__, status);
+	pr_info("%s called, sim status %d\n", __func__, (int)status);
 
 	if (init) {
 		init = 0;
