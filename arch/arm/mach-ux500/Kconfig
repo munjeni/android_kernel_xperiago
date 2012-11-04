@@ -1,0 +1,305 @@
+if ARCH_U8500
+
+config UX500_SOC_COMMON
+	bool
+	default y
+	select ARM_GIC
+	select NOMADIK_GPIO
+	select ARM_ERRATA_753970
+	select ARM_ERRATA_754322
+	select ARM_ERRATA_764369
+	select SYS_SOC
+	select HAS_MTU
+
+config UX500_SOC_DBX500
+	depends on UX500_SOC_DB5500 || UX500_SOC_DB8500
+	bool
+
+menu "Ux500 SoC"
+
+config UX500_SOC_DB5500
+	bool "DB5500"
+	select UX500_SOC_DBX500
+
+config UX500_SOC_DB8500
+	bool "DB8500"
+	select UX500_SOC_DBX500
+
+endmenu
+
+config U8500_SD_MMC_CARD_SUPPORT
+	bool "Configure SD/MMC card support"
+	default n
+	help
+	  This option enables the use of an external SD/MMC card.
+
+config U8500_SD_MMC_CARD_GPIO_PWR
+	bool "Configure SD/MMC Card power enable to be controlled via GPIO pin."
+	depends on U8500_SD_MMC_CARD_SUPPORT
+	default n
+	help
+	  This option enables the use of a GPIO pin to power the SD/MMC Card.
+
+menu "Ux500 target platform (boards)"
+
+config MACH_U8500
+	bool "U8500 Development platform"
+	depends on UX500_SOC_DB8500
+	help
+	  Include support for the mop500 development platform.
+
+config MACH_U8500_KUMQUAT
+	bool "Sony Ericsson Kumquat"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson Kumquat devices.
+
+config MACH_U8500_LOTUS
+	bool "Sony Ericsson Lotus"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson Lotus devices.
+
+config MACH_U8500_NYPON
+	bool "Sony Ericsson Nypon"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson Nypon devices.
+
+config MACH_U8500_PDP
+	bool "Sony Ericsson PDP"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson PDP devices.
+
+config MACH_U8500_PDP_R2
+	bool "Sony Ericsson PDP R2"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson PDP R2 devices.
+
+config MACH_U8500_PEPPER
+	bool "Sony Ericsson Pepper"
+	select WLAN_PMUEN_UX500
+	select CW1200_USE_GPIO_IRQ
+	help
+	  Support for Sony Ericsson Pepper devices.
+
+config MACH_HREFV60
+       bool "U85000 Development platform, HREFv60 version"
+       depends on UX500_SOC_DB8500
+	select MACH_U8500
+       help
+         Include support for the HREFv60 new development platform.
+
+config MACH_U8520
+       bool "U8520 Development platform"
+       depends on UX500_SOC_DB8500
+	select MACH_U8500
+       help
+         Include support for the 8520 development platform.
+
+config MACH_SNOWBALL
+	bool "U8500 Snowball platform"
+	depends on UX500_SOC_DB8500
+	select MACH_U8500
+	help
+	  Include support for the snowball development platform.
+
+config MACH_U5500
+	bool "U5500 Development platform"
+	depends on UX500_SOC_DB5500
+	help
+	  Include support for the U5500 development platform.
+
+config MACH_U9540
+	bool "U9540 Development platform"
+	depends on UX500_SOC_DB8500
+	select MACH_U8500
+	help
+	  Include support for the U9540 development platform.
+endmenu
+
+choice
+	prompt "Ux500 UIB Keylayout"
+	default KEYLAYOUT_LAYOUT1
+
+config KEYLAYOUT_LAYOUT1
+	bool "UIB Keylayout 1; for generic users"
+	help
+	  Supported keylayout for some numerics, power/call buttons,
+	  volume control etc
+
+config KEYLAYOUT_LAYOUT2
+	bool "UIB Keylayout 2; for connectivity users"
+	help
+	  Supports keylayout numerics 0-9, left/right/up/down/back/
+	  enter keys and special character "."(dot)
+
+endchoice
+
+choice
+	prompt "DBx500 sched_clock"
+
+config DBX500_SCHED_CLOCK_PRCMU
+	bool "PRCMU Timer sched_clock"
+	depends on CLKSRC_DBX500_PRCMU
+	select CLKSRC_DBX500_PRCMU_SCHED_CLOCK
+	help
+	  Use the always on PRCMU Timer as sched_clock
+
+config DB5500_MTIMER_SCHED_CLOCK
+	bool "MTIMER sched_clock"
+	depends on CLKSRC_DB5500_MTIMER
+	select CLKSRC_DB5500_MTIMER_SCHED_CLOCK
+	help
+	  Use the always on MTIMER as sched_clock
+
+config DBX500_MTU_SCHED_CLOCK
+	bool "MTU sched_clock"
+	depends on HAS_MTU
+	select NOMADIK_MTU_SCHED_CLOCK
+	help
+	  Use the Multi Timer Unit as the sched_clock.
+
+endchoice
+
+config UX500_DEBUG_UART
+	int "Ux500 UART to use for low-level debug"
+	default 2
+	help
+	  Choose the UART on which kernel low-level debug messages should be
+	  output.
+
+config UX500_GPIO_KEYS
+        bool "Use gpio-keys for proximity and hal sensors"
+        depends on KEYBOARD_GPIO
+        help
+	  Add proximity and hal sensors as a gpio keyboard.
+
+config U5500_MODEM_IRQ
+	bool "Modem IRQ support"
+	depends on UX500_SOC_DB5500
+	default y
+	help
+	  Add support for handling IRQ:s from modem side
+
+config DBX500_PRCMU_DEBUG
+	bool "DBX500 PRCMU debug"
+	depends on ((MFD_DB5500_PRCMU || MFD_DB8500_PRCMU) && DEBUG_FS)
+	help
+	  Add support for PRCMU debug
+
+config TEE_UX500
+	bool "Trusted Execution Environment (TEE) ux500 hardware support"
+	depends on TEE_SUPPORT && HWMEM
+	default y
+	help
+	  Adds TEE hardware support for ux500 platforms.
+
+config TEE_SVP
+	bool "Trusted Execution Environment (TEE) ux500 SVP support"
+	depends on TEE_SUPPORT && UX500_SVP
+	default y
+	help
+	  Adds TEE support for SVP in ux500 platforms.
+
+config DB8500_MLOADER
+	bool "Modem firmware upload/download support"
+	depends on UX500_SOC_DB8500
+	select DBX500_MLOADER
+	help
+	  Adds Modem firmware upload/download support to DB8500.
+
+config U5500_MLOADER
+	bool "mLoader, mem config from kernel boot args exported to sysfs"
+	depends on UX500_SOC_DB5500
+	help
+	  Link between boot args and user space program that loads the modem ELF.
+	  This is used to expose the modem parameters using sysfs interface.
+
+config UX500_DEBUG_HWREG
+	bool "Debug hardware registers from userspace"
+	depends on (DEBUG_FS && UX500_SOC_DB8500)
+	help
+	  Adds various debug files to access registers.
+	  This should never ever be used for anything else than debugging.
+
+config UX500_DEBUG_NO_LAUTERBACH
+       bool "Disable clocks needed for Lauterbach debugging"
+       help
+	  Disable clocks needed for Lauterbach debugging at boot.
+	  If yes, you will reduce the power consumption.
+
+config UX500_L2X0_PREFETCH_CTRL
+	bool "PL310 prefetch control"
+	depends on (UX500_SOC_DB8500 || UX500_SOC_DB5500) && \
+			(TEE_UX500 && CACHE_L2X0)
+	default y
+	help
+	  Adds interface to control instruction and data prefetch.
+	  Communication with Trustzone is done through TEE driver.
+
+config UX500_DB_DUMP
+	bool "DBx500 register dump on crash"
+	depends on (UX500_SOC_DB8500 || UX500_SOC_DB5500)
+	default y
+	help
+	  Reads specific DBx500 register in case of kernel crash
+	  and saves it.
+
+config UX500_DEBUG_LAST_IO
+	bool "Save address of last IO operation"
+	depends on (UX500_SOC_DB8500 || UX500_SOC_DB5500)
+	default n
+	help
+	  In DBx500 SOCs, processor bus hangs if an IO access is done on a
+	  peripheral that is not powered or clocked. Enable this option to debug
+	  such problems. It saves the address on which the last IO operation was
+	  done and the program-counter value from where the IO operation was
+	  done. These values are saved in non-cacheable memory so that they are
+	  included in kernel dump.
+
+config RTC_HCTOHC
+	bool "Set 2nd RTC from 1st RTC at startup and resume"
+	depends on (UX500_SOC_DB8500 && RTC_HCTOSYS && RTC_DRV_PL031)
+	default y
+	help
+	  If you say yes here, the 2nd RTC will be set using
+	  the value read from the 1st RTC device. This is useful when
+	  the 1st RTC is battery backed but not the 2nd.
+
+
+source "arch/arm/mach-ux500/Kconfig-arch"
+source "arch/arm/mach-ux500/pm/Kconfig"
+source "arch/arm/mach-ux500/test/Kconfig"
+
+config SIMPLE_REMOTE_PLATFORM
+        bool "Simple Remote platform specific driver"
+        default n
+        help
+          Provides support for detecting 3.5mm audio jack, such as wired
+          headset. This is the platform specific layer.
+
+config SIMPLE_REMOTE_INVERT_PLUG_DETECTION_STATE
+        bool "Invert state of plug detection"
+        depends on SIMPLE_REMOTE_PLATFORM
+        help
+          This option enables to invert headphone plug detection state,
+          currently the plug detection state was low state when headphone
+          was inserted, but it is high state on some products, so that
+          we need invert this state on these products.
+
+config SONY_SSM
+	bool "Support Super Stamina Mode"
+	default n
+	help
+	  This enables support for power mode notifications, required by Super
+	  Stamina Mode.
+
+endif

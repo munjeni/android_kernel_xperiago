@@ -1,0 +1,64 @@
+Configuration files can be found in arch/arm/configs.
+
+Xperia P => riogrande_nypon_defconfig
+Xperia U => riogrande_kumquat_defconfig
+Xperia Sola => riogrande_pepper_defconfig
+Xperia Go => riogrande_lotus_defconfig
+
+
+To flash your kernel using Fastboot perform the following steps:
+
+1) Assemble the kernel image:
+	$ mkbootimg --base 0x0 --kernel <path to zImage> \
+		--ramdisk <path to ramdisk> --output <flashable image file> \
+		--cmdline "<kernel command line>"
+2) Flash the kernel image:
+	$ fastboot flash boot <flashable image file>
+
+In the official SW the following command line arguments are given
+to the kernel:
+	cachepolicy=writealloc
+	noinitrd
+	init=init
+	board_id=1
+	logo.nologo
+	root=/dev/ram0
+	rw
+	rootwait
+	console=ttyAMA2,115200n8
+	androidboot.console=ttyAMA2
+	androidboot.hardware=st-ericsson
+	<memory layout>
+	mpcore_wdt.mpcore_margin=359
+
+Memory layout for Xperia P:
+	mem=96M@0
+	mem_mtrace=15M@96M
+	mem_mshared=1M@111M
+	mem_modem=16M@112M
+	mem=32M@128M
+	mem_issw=1M@160M
+	hwmem=167M@161M
+	mem=696M@328M
+	vmalloc=384M
+
+Memory layout for Xperia U and Xperia Sola:
+	mem=96M@0
+	mem_mtrace=15M@96M
+	mem_mshared=1M@111M
+	mem_modem=16M@112M
+	mem=32M@128M
+	mem_issw=1M@160M
+	hwmem=79M@161M
+	mem=272M@240M
+
+Memory layout for Xperia Go:
+	mem=96M@0
+	mem_mtrace=15M@96M
+	mem_mshared=1M@111M
+	mem_modem=16M@112M
+	mem=32M@128M
+	mem_issw=1M@160M
+	hwmem=64M@161M
+	mem=287M@225M
+

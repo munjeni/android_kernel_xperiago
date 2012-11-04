@@ -1,0 +1,13 @@
+comment "TAOS proximity & light sensor"
+
+config SENSORS_TSL2772
+	tristate "TAOS TSL2772 proximity and ambient light sensor"
+	depends on I2C
+	default n
+	help
+	 If you say yes here you get support for the TAOS tsl2772,
+	 proximity and ambient light sensors.
+
+	 This driver can also be built as a module.  If so, the module
+	 will be called tsl2772.
+

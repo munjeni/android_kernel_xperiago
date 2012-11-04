@@ -1,0 +1,209 @@
+#
+# SEMC RMI4 bus configuration
+#
+
+menuconfig SEMC_RMI4_BUS
+	bool "SEMC RMI4 bus"
+	default n
+	help
+	  Say yes here if you want to use SEMC version of RMI4 bus.
+	  This will enable support for all Synaptics touch chips that
+	  use the RMI4 protocol.
+
+	  This option will make all other drivers for this selectble.
+
+	  If unsure, say N
+
+if SEMC_RMI4_BUS
+
+config RMI4_DEBUG_BUS
+	bool "RMI4 bus debug messages"
+	help
+	  Say Y here if you want or need to debug the RMI4 bus. This
+	  will enable a lot of debug information which is useful for
+	  debugging
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_BUS
+	tristate "SEMC rmi4 bus support"
+	default y
+	help
+	  This is required for all RMI4 based devices.
+	  Without this you will not have much use of the rest.
+
+	  To compile this driver as a module, choose M here. The
+	  module will be called rmi4_bus.
+
+	  If unsure, say M
+
+config SEMC_GENERIC_RMI4_DRIVER
+	tristate "SEMC rmi4 platform driver"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default y
+	help
+	  This driver is initialized as a platform driver
+	  and will (based on supplied platform data) initialize
+	  all required RMI4 function drivers.
+	  Without this, nothing will work.
+
+	  To compile this driver as a module, choose M here. The
+	  module will be called rmi4_driver.
+
+	  If unsure, say Y
+
+config SEMC_GENERIC_RMI4_SPI_ADAPTOR
+	tristate "SEMC rmi4 spi adaptor"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default n
+	help
+	  This is an RMI4 adaptor that uses the SPI bus. If you have
+	  an RMI4 compatible chip on an SPI bus, you will need this.
+
+	  To compile this driver as a module, say M here. The module
+	  will be called rmi4_spi_adaptor.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_I2C_ADAPTOR
+	tristate "SEMC rmi4 i2c adaptor"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default n
+	help
+	  This is an RMI4 adaptor that uses the I2C bus. If you have
+	  an RMI4 compatible chip on an I2C bus, you will need this.
+
+	  To compile this driver as a module, say M here. The module
+	  will be called rmi4_i2c_adaptor.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_F01
+	tristate "SEMC rmi4 function 01 handler"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default y
+	help
+	  This is a function handler for RMI4 function 01. This function
+	  is responsible for interrupt handling and other interesting low
+	  level features.
+	  Without this, none of the other function handler will work.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_function_01.
+
+	  If unsure, say Y here.
+
+config SEMC_GENERIC_RMI4_F11
+	tristate "SEMC rmi4 function 11 handler"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default y
+	help
+	  This is a function handler for RMI4 function 11. This function
+	  is responsible for the 2D area of touch panels.
+	  Without this, the touch panel will not work.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_function_11.
+
+	  If unsure, say Y here.
+
+config SEMC_GENERIC_RMI4_F34
+	tristate "SEMC rmi4 function 34 handler"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default y
+	help
+	  This module does firmware upgrade on the chip. If you are going to
+	  update chip FW on running devices via for example system SW update,
+	  you will want this.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_finction_34.
+
+	  If unsure, say Y here.
+
+config SEMC_GENERIC_RMI4_F54
+	tristate "SEMC rmi4 function 44 handler"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default n
+	help
+	  This module is used for in-hw tuning. This is something that normally
+	  is not used.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_function_54.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_F54_DBG_RAW_HEX
+	bool "Print data in raw hex"
+	depends on SEMC_GENERIC_RMI4_F54
+	help
+	  Prints read data as raw hex in kernel log.
+	  This is mainly used for debugging.
+
+	  This option will enable debug printouts in F54.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_F54_DBG_HUMAN_READABLE
+	bool "Print data human readable"
+	depends on SEMC_GENERIC_RMI4_F54
+	help
+	  Prints read data in human readable form in kernel log.
+	  This is mainly of use for debugging.
+
+	  This option will enable some debug functionality in F54.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_F54_WATCHDOG
+	bool "Enable watchdog to reset F54"
+	depends on SEMC_GENERIC_RMI4_F54
+	help
+	  If some call fails, the function can get stuck. This
+	  watchdog will reset this function in these cases.
+
+	  This option will enable the wathcdog feature in F54,
+	  which wil lensure that it can't get stuck in some
+	  arbitrary mode.
+
+	  If unsure, say Y here.
+
+config SEMC_GENERIC_RMI4_CHAR_DEV
+	tristate "SEMC rmi4 char_dev handler"
+	depends on SEMC_GENERIC_RMI4_BUS
+	default n
+	help
+	  This module is used for in-hw tuning. This is something that normally
+	  is not used.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_char_dev.
+
+	  If unsure, say N here.
+
+config SEMC_GENERIC_RMI4_3250_EARLY_SUSPEND
+	tristate "Enable early suspend for the 3250 chip"
+	depends on HAS_EARLYSUSPEND
+	default n
+	help
+	  This module implements early suspend functionality
+	  for the 3250 (Incell) touch chip.
+	  If you are using one of these chips and are running
+	  on Android, you will want to say yes here.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called rmi4_3250_e_suspend
+
+config SEMC_GENERIC_RMI4_3250_EARLY_SUSPEND_DEBUG
+	bool "Enable early suspend debug for 3250 chips"
+	depends on SEMC_GENERIC_RMI4_3250_EARLY_SUSPEND
+	help
+	  Enable debug of the early suspend functionslity for
+	  the 3250 Incell chips. This will also create sysfs
+	  interfaces for modifying the delay before the chip
+	  goes into sleep mode.
+
+	  If unure, say N here.
+
+endif # SEMC_RMI4_BUS

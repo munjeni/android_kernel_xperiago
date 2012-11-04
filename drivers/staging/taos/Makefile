@@ -1,0 +1,1 @@
+obj-$(CONFIG_SENSORS_TSL2772)	+= tsl277x.o
