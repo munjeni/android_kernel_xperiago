@@ -716,7 +716,7 @@ static int __init handle_display_devices_in_u9540(void)
 
 #ifdef CONFIG_FB_MCDE
 	(void)mcde_dss_register_notifier(&display_nb);
-#endif*/
+#endif
 
 	/* Set powermode to STANDBY if startup graphics is executed */
 	if (display_initialized_during_boot)
