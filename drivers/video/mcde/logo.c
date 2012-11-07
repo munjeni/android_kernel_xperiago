@@ -127,7 +127,7 @@ static int load_565rle_image(char *filename)
 				memset16(bits, ptr[1], j << 1);
 			} else {
 				unsigned int widepixel = rle_to_rgba888(ptr[1]);
-				memset32((unsigned int *)bits, widepixel, n << 2);
+				memset32((unsigned int *)bits, widepixel, j << 2);
 			}
 			bits += j * fb_depth(info);
 			line_pos += j;
