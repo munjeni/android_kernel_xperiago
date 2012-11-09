@@ -60,7 +60,7 @@ static unsigned int rle_to_rgba888(unsigned int in)
 	widepixel = (in & 0x1F);
 	blue = (widepixel << 3) | (widepixel >> 2);
 	alpha = 0xff;
-	widepixel = (alpha << 24) | (blue << 16)| (green << 8) | (red);
+	widepixel = (alpha << 24) | (red << 16)| (green << 8) | (blue);
 
 	return widepixel;
 }
