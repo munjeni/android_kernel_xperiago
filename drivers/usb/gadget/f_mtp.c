@@ -4,6 +4,7 @@
  * Copyright (C) 2010 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
  * Copyright (C) 2011 Sony Ericsson Mobile Communications AB.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -350,7 +351,7 @@ static void mtp_complete_out(struct usb_ep *ep, struct usb_request *req)
 	struct mtp_dev *dev = _mtp_dev;
 
 	dev->rx_done = 1;
-	if (req->status != 0)
+	if (req->status != 0 && dev->state == STATE_BUSY)
 		dev->state = STATE_ERROR;
 
 	wake_up(&dev->read_wq);
@@ -489,8 +490,9 @@ requeue_req:
 	}
 
 	/* wait for a request to complete */
-	ret = wait_event_interruptible(dev->read_wq, dev->rx_done);
-	if (ret < 0) {
+	ret = wait_event_interruptible(dev->read_wq,
+		dev->rx_done || dev->state != STATE_BUSY);
+	if (ret < 0 || !dev->rx_done) {
 		r = ret;
 		usb_ep_dequeue(dev->ep_out, req);
 		goto done;
@@ -1124,9 +1126,9 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 			spin_lock_irqsave(&dev->lock, flags);
 			/* Flushing the buffers as mentioned in MTP spec */
 			usb_ep_fifo_flush(dev->ep_out);
+			dev->state = STATE_RESET;
 			wake_up(&dev->read_wq);
 			wake_up(&dev->write_wq);
-			dev->state = STATE_RESET;
 			spin_unlock_irqrestore(&dev->lock, flags);
 
 			/* We need to queue a request to read the remaining

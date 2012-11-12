@@ -211,6 +211,7 @@ static inline enum b2r2_native_fmt to_native_fmt(struct b2r2_control *cont,
 	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return B2R2_NATIVE_YUV;
 	default:
 		/* Should never ever happen */
@@ -240,103 +241,13 @@ static inline enum b2r2_ty get_alpha_range(struct b2r2_control *cont,
 	return B2R2_TY_ALPHA_RANGE_128; /* 0 - 128 */
 }
 
-static unsigned int get_pitch(struct b2r2_control *cont,
-		enum b2r2_blt_fmt format, u32 width)
-{
-	switch (format) {
-	case B2R2_BLT_FMT_1_BIT_A1: {
-		int pitch = width >> 3;
-		/* Check for remainder */
-		if (width & 7)
-			pitch++;
-		return pitch;
-		break;
-	}
-	case B2R2_BLT_FMT_8_BIT_A8:
-		return width;
-		break;
-	case B2R2_BLT_FMT_16_BIT_RGB565: /* all 16 bits/pixel RGB formats */
-	case B2R2_BLT_FMT_16_BIT_ARGB1555:
-	case B2R2_BLT_FMT_16_BIT_ARGB4444:
-	case B2R2_BLT_FMT_16_BIT_ABGR4444:
-		return width * 2;
-		break;
-	case B2R2_BLT_FMT_24_BIT_RGB888: /* all 24 bits/pixel raster formats */
-	case B2R2_BLT_FMT_24_BIT_ARGB8565:
-	case B2R2_BLT_FMT_24_BIT_YUV888:
-	case B2R2_BLT_FMT_24_BIT_VUY888:
-		return width * 3;
-		break;
-	case B2R2_BLT_FMT_32_BIT_ARGB8888: /* all 32 bits/pixel formats */
-	case B2R2_BLT_FMT_32_BIT_ABGR8888:
-	case B2R2_BLT_FMT_32_BIT_VUYA8888:
-	case B2R2_BLT_FMT_32_BIT_AYUV8888:
-		return width * 4;
-		break;
-	case B2R2_BLT_FMT_CB_Y_CR_Y:
-		/* width of the buffer must be a multiple of 4 */
-		if (width & 3) {
-			b2r2_log_warn(cont->dev, "%s: Illegal width "
-				"for fmt=%#010x width=%d\n", __func__,
-				format, width);
-			return 0;
-		}
-		return width * 2;
-		break;
-	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
-		return width;
-		break;
-	/* fall through, same pitch and pointers */
-	case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
-	case B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR:
-	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
-	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
-		/* width of the buffer must be a multiple of 2 */
-		if (width & 1) {
-			b2r2_log_warn(cont->dev, "%s: Illegal width "
-				"for fmt=%#010x width=%d\n", __func__,
-				format, width);
-			return 0;
-		}
-		/*
-		 * return pitch of the Y-buffer.
-		 * U and V pitch can be derived from it.
-		 */
-		return width;
-		break;
-	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
-	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
-		/* width of the buffer must be a multiple of 16. */
-		if (width & 15) {
-			b2r2_log_warn(cont->dev, "%s: Illegal width "
-				"for fmt=%#010x width=%d\n", __func__,
-				format, width);
-			return 0;
-		}
-		/*
-		 * return pitch of the Y-buffer.
-		 * U and V pitch can be derived from it.
-		 */
-		return width;
-		break;
-	default:
-		b2r2_log_warn(cont->dev, "%s: Unable to determine pitch "
-			"for fmt=%#010x width=%d\n", __func__,
-			format, width);
-		return 0;
-	}
-}
-
 static s32 validate_buf(struct b2r2_control *cont,
 		const struct b2r2_blt_img *image,
 		const struct b2r2_resolved_buf *buf)
 {
 	u32 expect_buf_size;
 	u32 pitch;
+	u32 chroma_pitch;
 
 	if (image->width <= 0 || image->height <= 0) {
 		b2r2_log_warn(cont->dev, "%s: width=%d or height=%d negative"
@@ -346,7 +257,8 @@ static s32 validate_buf(struct b2r2_control *cont,
 
 	if (image->pitch == 0) {
 		/* autodetect pitch based on format and width */
-		pitch = get_pitch(cont, image->fmt, image->width);
+		pitch = b2r2_calc_pitch_from_width(cont->dev,
+			image->width, image->fmt);
 	} else
 		pitch = image->pitch;
 
@@ -361,22 +273,22 @@ static s32 validate_buf(struct b2r2_control *cont,
 	}
 
 	/* format specific adjustments */
+	chroma_pitch = b2r2_get_chroma_pitch(pitch, image->fmt);
 	switch (image->fmt) {
 	case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		/*
 		 * Use ceil(height/2) in case buffer height
 		 * is not divisible by 2.
 		 */
-		expect_buf_size +=
-			(pitch >> 1) * ((image->height + 1) >> 1) * 2;
+		expect_buf_size += chroma_pitch *
+			((image->height + 1) >> 1) * 2;
 		break;
 	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
-		expect_buf_size += (pitch >> 1) * image->height * 2;
-		break;
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
-		expect_buf_size += pitch * image->height * 2;
+		expect_buf_size += chroma_pitch * image->height * 2;
 		break;
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
@@ -558,6 +470,7 @@ static void setup_fill_input_stage(const struct b2r2_blt_request *req,
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12:
 		if ((req->user_req.flags & B2R2_BLT_FLAG_SOURCE_FILL) != 0) {
 			fill_fmt = B2R2_NATIVE_AYCBCR8888;
 			/*
@@ -575,33 +488,9 @@ static void setup_fill_input_stage(const struct b2r2_blt_request *req,
 				b2r2_setup_ivmx(node, B2R2_CC_BLT_YUV888_TO_RGB);
 		} else {
 			/* SOURCE_FILL_RAW */
-			bool dst_yuv_planar =
-				B2R2_BLT_FMT_YUV420_PACKED_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YUV422_PACKED_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YVU420_PACKED_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YVU422_PACKED_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YUV444_PACKED_PLANAR ==
-					dst_img->fmt;
-
-			bool dst_yuv_semi_planar =
-				B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ==
-					dst_img->fmt ||
-				B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE ==
-					dst_img->fmt;
-
-			if (dst_yuv_planar || dst_yuv_semi_planar) {
+			if (b2r2_is_ycbcrp_fmt(dst_img->fmt) ||
+					b2r2_is_ycbcrsp_fmt(dst_img->fmt) ||
+					b2r2_is_mb_fmt(dst_img->fmt))
 				/*
 				 * SOURCE_FILL_RAW cannot be supported
 				 * with multi-buffer formats.
@@ -609,9 +498,8 @@ static void setup_fill_input_stage(const struct b2r2_blt_request *req,
 				 * from misbehaving.
 				 */
 				fill_fmt = B2R2_NATIVE_AYCBCR8888;
-			} else {
+			else
 				fill_fmt = to_native_fmt(cont, dst_img->fmt);
-			}
 
 			switch (dst_img->fmt) {
 			case B2R2_BLT_FMT_24_BIT_YUV888:
@@ -712,27 +600,13 @@ static void setup_input_stage(const struct b2r2_blt_request *req,
 	u32 fctl = 0;
 	u32 rsf = 0;
 	u32 rzi = 0;
-	bool yuv_semi_planar =
-		src_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		src_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
-
-	bool yuv_planar =
-		src_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		src_img->fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR;
-
 	struct b2r2_filter_spec *hf;
 	struct b2r2_filter_spec *vf;
-
 	bool use_h_filter = false;
 	bool use_v_filter = false;
-
+	const bool yuv_planar = b2r2_is_ycbcrp_fmt(src_img->fmt);
+	const bool yuv_semi_planar = b2r2_is_ycbcrsp_fmt(src_img->fmt) ||
+		b2r2_is_mb_fmt(src_img->fmt);
 	struct b2r2_control *cont = req->instance->control;
 	bool fullrange = (req->user_req.flags &
 		B2R2_BLT_FLAG_FULL_RANGE_YUV) != 0;
@@ -748,7 +622,8 @@ static void setup_input_stage(const struct b2r2_blt_request *req,
 
 	if (src_img->pitch == 0) {
 		/* Determine pitch based on format and width of the image. */
-		src_pitch = get_pitch(cont, src_img->fmt, src_img->width);
+		src_pitch = b2r2_calc_pitch_from_width(cont->dev,
+			src_img->width, src_img->fmt);
 	} else {
 		src_pitch = src_img->pitch;
 	}
@@ -852,7 +727,8 @@ static void setup_input_stage(const struct b2r2_blt_request *req,
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
-	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE: {
+	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12: {
 		/*
 		 * Luma handled in the same way
 		 * for all YUV multi-buffer formats.
@@ -906,6 +782,7 @@ static void setup_input_stage(const struct b2r2_blt_request *req,
 		case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
 		case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 		case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
+		case B2R2_BLT_FMT_YV12:
 			/*
 			 * Chrominance is always half the luminance size
 			 * so chrominance resizer is always active.
@@ -1025,50 +902,14 @@ static void setup_input_stage(const struct b2r2_blt_request *req,
 		 */
 		u32 cb_addr = 0;
 		u32 cr_addr = 0;
-		u32 chroma_pitch = 0;
-		bool swapped_chroma =
-			src_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-			src_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR;
 		enum b2r2_native_fmt src_fmt =
 			to_native_fmt(cont, src_img->fmt);
+		u32 chroma_pitch =
+			b2r2_get_chroma_pitch(src_pitch, src_img->fmt);
 
-		if (swapped_chroma)
-			cr_addr = req->src_resolved.physical_address +
-				src_pitch * src_img->height;
-		else
-			cb_addr = req->src_resolved.physical_address +
-				src_pitch * src_img->height;
-
-		switch (src_img->fmt) {
-		case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
-		case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
-			chroma_pitch = src_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					(src_img->height >> 1);
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					(src_img->height >> 1);
-			break;
-		case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
-		case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
-			chroma_pitch = src_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					src_img->height;
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					src_img->height;
-			break;
-		case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
-			/* Chrominance has full resolution, same as luminance.*/
-			chroma_pitch = src_pitch;
-			cr_addr =
-				cb_addr + chroma_pitch * src_img->height;
-			break;
-		default:
-			break;
-		}
+		b2r2_get_cb_cr_addr(req->src_resolved.physical_address,
+			src_pitch, src_img->height, src_img->fmt,
+			&cr_addr, &cb_addr);
 
 		node->node.GROUP3.B2R2_SBA = cr_addr;
 		node->node.GROUP3.B2R2_STY =
@@ -1222,20 +1063,9 @@ static void setup_dst_read_stage(const struct b2r2_blt_request *req,
 	u32 fctl = 0;
 	u32 rsf = 0;
 	u32 endianness = 0;
-	bool yuv_semi_planar =
-		dst_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		dst_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
-
-	bool yuv_planar =
-		dst_img->fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		dst_img->fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR;
+	const bool yuv_planar = b2r2_is_ycbcrp_fmt(dst_img->fmt);
+	const bool yuv_semi_planar = b2r2_is_ycbcrsp_fmt(dst_img->fmt) ||
+		b2r2_is_mb_fmt(dst_img->fmt);
 
 	u32 dst_pitch = 0;
 	struct b2r2_control *cont = req->instance->control;
@@ -1244,7 +1074,8 @@ static void setup_dst_read_stage(const struct b2r2_blt_request *req,
 
 	if (dst_img->pitch == 0) {
 		/* Determine pitch based on format and width of the image. */
-		dst_pitch = get_pitch(cont, dst_img->fmt, dst_img->width);
+		dst_pitch = b2r2_calc_pitch_from_width(cont->dev,
+			dst_img->width, dst_img->fmt);
 	} else {
 		dst_pitch = dst_img->pitch;
 	}
@@ -1299,7 +1130,8 @@ static void setup_dst_read_stage(const struct b2r2_blt_request *req,
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
-	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE: {
+	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12: {
 		if (dst_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
 			dst_img->fmt ==
 				B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR) {
@@ -1320,6 +1152,7 @@ static void setup_dst_read_stage(const struct b2r2_blt_request *req,
 		case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
 		case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 		case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
+		case B2R2_BLT_FMT_YV12:
 			/*
 			 * Chrominance is always half the luminance size
 			 * so chrominance resizer is always active.
@@ -1394,47 +1227,14 @@ static void setup_dst_read_stage(const struct b2r2_blt_request *req,
 		 */
 		u32 cb_addr = 0;
 		u32 cr_addr = 0;
-		u32 chroma_pitch = 0;
-		bool swapped_chroma =
-			dst_img->fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-			dst_img->fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR;
+		u32 chroma_pitch =
+			b2r2_get_chroma_pitch(dst_pitch, dst_img->fmt);
 		enum b2r2_native_fmt dst_native_fmt =
 				to_native_fmt(cont, dst_img->fmt);
 
-		if (swapped_chroma)
-			cr_addr = req->dst_resolved.physical_address +
-				dst_pitch * dst_img->height;
-		else
-			cb_addr = req->dst_resolved.physical_address +
-				dst_pitch * dst_img->height;
-
-		switch (dst_img->fmt) {
-		case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
-			chroma_pitch = dst_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					(dst_img->height >> 1);
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					(dst_img->height >> 1);
-			break;
-		case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
-			chroma_pitch = dst_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					dst_img->height;
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					dst_img->height;
-			break;
-		case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
-			chroma_pitch = dst_pitch;
-			cr_addr =
-				cb_addr + chroma_pitch * dst_img->height;
-			break;
-		default:
-			break;
-		}
+		b2r2_get_cb_cr_addr(req->dst_resolved.physical_address,
+			dst_pitch, dst_img->height, dst_img->fmt,
+			&cb_addr, &cr_addr);
 
 		node->node.GROUP3.B2R2_SBA = cr_addr;
 		node->node.GROUP3.B2R2_STY =
@@ -1638,21 +1438,9 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 {
 	const struct b2r2_blt_img *dst_img = &(req->user_req.dst_img);
 	const enum b2r2_blt_fmt dst_fmt = dst_img->fmt;
-	const bool yuv_planar_dst =
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR;
-
-	const bool yuv_semi_planar_dst =
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
-
+	const bool yuv_planar_dst = b2r2_is_ycbcrp_fmt(dst_fmt);
+	const bool yuv_semi_planar_dst = b2r2_is_ycbcrsp_fmt(dst_fmt) ||
+		b2r2_is_mb_fmt(dst_fmt);
 	const u32 group4_b2r2_sty =
 		(B2R2_GENERIC_WORK_BUF_PITCH << B2R2_TY_BITMAP_PITCH_SHIFT) |
 		B2R2_GENERIC_WORK_BUF_FMT |
@@ -1671,8 +1459,8 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 	b2r2_log_info(cont->dev, "%s ENTRY\n", __func__);
 
 	if (dst_img->pitch == 0) {
-		/* Determine pitch based on format and width of the image. */
-		dst_pitch = get_pitch(cont, dst_img->fmt, dst_img->width);
+		dst_pitch = b2r2_calc_pitch_from_width(cont->dev,
+			dst_img->width, dst_img->fmt);
 	} else
 		dst_pitch = dst_img->pitch;
 
@@ -1696,31 +1484,19 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 
 		u32 cb_addr = 0;
 		u32 cr_addr = 0;
-		u32 chroma_pitch = 0;
-		bool swapped_chroma =
-			dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR;
+		u32 chroma_pitch = b2r2_get_chroma_pitch(dst_pitch, dst_fmt);
+
 		enum b2r2_native_fmt dst_native_fmt =
 				to_native_fmt(cont, dst_img->fmt);
 		enum b2r2_ty alpha_range = get_alpha_range(cont, dst_img->fmt);
 
-		if (swapped_chroma)
-			cr_addr = req->dst_resolved.physical_address +
-				dst_pitch * dst_img->height;
-		else
-			cb_addr = req->dst_resolved.physical_address +
-				dst_pitch * dst_img->height;
+		b2r2_get_cb_cr_addr(req->dst_resolved.physical_address,
+			dst_pitch, dst_img->height, dst_fmt,
+			&cr_addr, &cb_addr);
 
 		switch (dst_fmt) {
 		case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
 		case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
-			chroma_pitch = dst_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					(dst_img->height >> 1);
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					(dst_img->height >> 1);
 			/*
 			 * Chrominance is always half the luminance size
 			 * so chrominance resizer is always active.
@@ -1735,13 +1511,6 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 			break;
 		case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
 		case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
-			chroma_pitch = dst_pitch >> 1;
-			if (swapped_chroma)
-				cb_addr = cr_addr + chroma_pitch *
-					dst_img->height;
-			else
-				cr_addr = cb_addr + chroma_pitch *
-					dst_img->height;
 			/*
 			 * YUV422 or YVU422
 			 * Chrominance is always half the luminance size
@@ -1755,9 +1524,6 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 			rsf |= (1 << 10) << B2R2_RSF_VSRC_INC_SHIFT;
 			break;
 		case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
-			chroma_pitch = dst_pitch;
-			cr_addr =
-				cb_addr + chroma_pitch * dst_img->height;
 			/*
 			 * No scaling required since
 			 * chrominance is not subsampled.
@@ -1824,7 +1590,6 @@ static void setup_writeback_stage(const struct b2r2_blt_request *req,
 
 		node->node.GROUP4.B2R2_SBA = in_buf->phys_addr;
 		node->node.GROUP4.B2R2_STY = group4_b2r2_sty;
-
 
 		/*
 		 * Red chroma (V-component)
@@ -2121,19 +1886,9 @@ int b2r2_generic_analyze(const struct b2r2_blt_request *req,
 				(B2R2_BLT_FLAG_SOURCE_FILL |
 				B2R2_BLT_FLAG_SOURCE_FILL_RAW)) != 0;
 
-	yuv_planar_dst =
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR;
-	yuv_semi_planar_dst =
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
+	yuv_planar_dst = b2r2_is_ycbcrp_fmt(dst_fmt);
+	yuv_semi_planar_dst = b2r2_is_ycbcrsp_fmt(dst_fmt) ||
+		b2r2_is_mb_fmt(dst_fmt);
 
 	*node_count = 0;
 	*work_buf_width = 0;
@@ -2428,31 +2183,12 @@ void b2r2_generic_set_areas(const struct b2r2_blt_request *req,
 	const struct b2r2_blt_rect *dst_rect = &(req->user_req.dst_rect);
 	const struct b2r2_blt_rect *src_rect = &(req->user_req.src_rect);
 	const enum b2r2_blt_fmt src_fmt = req->user_req.src_img.fmt;
-	bool yuv_multi_buffer_src =
-		src_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		src_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		src_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
+	const bool yuv_multi_buffer_src = b2r2_is_ycbcrsp_fmt(src_fmt) ||
+		b2r2_is_ycbcrp_fmt(src_fmt) || b2r2_is_mb_fmt(src_fmt);
 	const enum b2r2_blt_fmt dst_fmt = req->user_req.dst_img.fmt;
-	const bool yuv_multi_buffer_dst =
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-		dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE ||
-		dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
+	const bool yuv_multi_buffer_dst = b2r2_is_ycbcrsp_fmt(dst_fmt) ||
+		b2r2_is_ycbcrp_fmt(dst_fmt) || b2r2_is_mb_fmt(dst_fmt);
+
 	s32 h_scf = 1 << 10;
 	s32 v_scf = 1 << 10;
 	s32 src_x = 0;
@@ -2830,19 +2566,6 @@ void b2r2_generic_set_areas(const struct b2r2_blt_request *req,
 	if (yuv_multi_buffer_dst) {
 		s32 dst_w = dst_rect_area->width;
 		s32 dst_h = dst_rect_area->height;
-		bool yuv420_dst =
-			dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE;
-
-		bool yuv422_dst =
-			dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR ||
-			dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE;
 		node = node->next;
 		/* Luma on SRC3 */
 		node->node.GROUP5.B2R2_SXY =
@@ -2852,7 +2575,7 @@ void b2r2_generic_set_areas(const struct b2r2_blt_request *req,
 			((dst_w & 0xfff) << B2R2_SZ_WIDTH_SHIFT) |
 			((dst_h & 0xfff) << B2R2_SZ_HEIGHT_SHIFT);
 
-		if (yuv420_dst) {
+		if (b2r2_is_ycbcr420_fmt(dst_fmt)) {
 			/*
 			 * Chroma goes on SRC2 and potentially on SRC1.
 			 * Chroma is half the size of luma. Must round up
@@ -2879,7 +2602,7 @@ void b2r2_generic_set_areas(const struct b2r2_blt_request *req,
 				node->node.GROUP3.B2R2_SSZ =
 					node->node.GROUP4.B2R2_SSZ;
 			}
-		} else if (yuv422_dst) {
+		} else if (b2r2_is_ycbcr422_fmt(dst_fmt)) {
 			/*
 			 * Chroma goes on SRC2 and potentially on SRC1.
 			 * Now chroma is half the size of luma
@@ -3007,11 +2730,7 @@ void b2r2_generic_set_areas(const struct b2r2_blt_request *req,
 		int i = 0;
 		/* Number of nodes required to write chroma output */
 		int n_nodes = 1;
-		if (dst_fmt == B2R2_BLT_FMT_YUV420_PACKED_PLANAR ||
-				dst_fmt == B2R2_BLT_FMT_YUV422_PACKED_PLANAR ||
-				dst_fmt == B2R2_BLT_FMT_YVU420_PACKED_PLANAR ||
-				dst_fmt == B2R2_BLT_FMT_YVU422_PACKED_PLANAR ||
-				dst_fmt == B2R2_BLT_FMT_YUV444_PACKED_PLANAR)
+		if (b2r2_is_ycbcrp_fmt(dst_fmt))
 			n_nodes = 2;
 
 		node->node.GROUP4.B2R2_SXY = 0;

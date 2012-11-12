@@ -201,11 +201,6 @@ enum av8100_pattern_audio {
 	AV8100_PATTERN_AUDIO_I2S_MEM
 };
 
-enum av8100_hdmi_user {
-	AV8100_HDMI_USER_AUDIO,
-	AV8100_HDMI_USER_VIDEO
-};
-
 struct av8100_video_input_format_cmd {
 	enum av8100_dsi_mode		dsi_input_mode;
 	enum av8100_pixel_format	input_pixel_format;
@@ -414,12 +409,9 @@ struct av8100_status {
 
 int av8100_init(void);
 void av8100_exit(void);
-int av8100_hdmi_get(enum av8100_hdmi_user user);
-int av8100_hdmi_put(enum av8100_hdmi_user user);
+int av8100_hdmi_get(void);
+int av8100_hdmi_put(void);
 int av8100_hdmi_video_off(void);
-int av8100_hdmi_video_on(void);
-void av8100_conf_lock(void);
-void av8100_conf_unlock(void);
 int av8100_powerwakeup(bool from_scan_mode);
 int av8100_powerscan(bool to_scan_mode);
 int av8100_powerup(void);

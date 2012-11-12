@@ -50,6 +50,8 @@ enum b2r2_blt_fmt compdev_to_blt_format(enum compdev_fmt fmt)
 		return B2R2_BLT_FMT_YUV420_PACKED_PLANAR;
 	case COMPDEV_FMT_YVU420_P:
 		return B2R2_BLT_FMT_YVU420_PACKED_PLANAR;
+	case COMPDEV_FMT_YV12:
+		return B2R2_BLT_FMT_YV12;
 	default:
 		return B2R2_BLT_FMT_UNUSED;
 	}
@@ -104,6 +106,7 @@ u32 compdev_get_stride(u32 width, enum compdev_fmt fmt)
 	case COMPDEV_FMT_YVU420_SP:
 	case COMPDEV_FMT_YUV420_P:
 	case COMPDEV_FMT_YVU420_P:
+	case COMPDEV_FMT_YV12:
 		stride = width;
 		break;
 	}
@@ -136,10 +139,57 @@ u32 compdev_get_bpp(enum compdev_fmt fmt)
 	case COMPDEV_FMT_YVU420_SP:
 	case COMPDEV_FMT_YUV420_P:
 	case COMPDEV_FMT_YVU420_P:
+	case COMPDEV_FMT_YV12:
 		bpp = 12;
 		break;
 	}
 	return bpp;
+}
+
+static int get_chroma_pitch(u32 luma_pitch, enum compdev_fmt fmt)
+{
+	int chroma_pitch;
+
+	switch (fmt) {
+	case COMPDEV_FMT_YV12:
+		chroma_pitch = ALIGN((luma_pitch >> 1), 16);
+	case COMPDEV_FMT_YUV420_SP:
+	case COMPDEV_FMT_YVU420_SP:
+		chroma_pitch = luma_pitch;
+	case COMPDEV_FMT_YCBCR42XMBN:
+	case COMPDEV_FMT_YUV420_P:
+	case COMPDEV_FMT_YVU420_P:
+		chroma_pitch = luma_pitch >> 1;
+	default:
+		chroma_pitch = 0;
+	}
+
+	return chroma_pitch;
+}
+
+static int get_chroma_size(u32 luma_pitch, u32 luma_height,
+		enum compdev_fmt fmt)
+{
+	int chroma_pitch = get_chroma_pitch(luma_pitch, fmt);
+
+	if (chroma_pitch <= 0)
+		return 0;
+
+	switch (fmt) {
+	case COMPDEV_FMT_YUV420_P:
+	case COMPDEV_FMT_YVU420_P:
+	case COMPDEV_FMT_YV12:
+		return chroma_pitch *
+			((luma_height + 1) >> 1) << 1;
+	case COMPDEV_FMT_YUV420_SP:
+	case COMPDEV_FMT_YVU420_SP:
+		return chroma_pitch *
+			((luma_height + 1) >> 1);
+	case COMPDEV_FMT_YCBCR42XMBN:
+		return chroma_pitch * (ALIGN(luma_height, 16) >> 1);
+	default:
+		return 0;
+	}
 }
 
 static int alloc_comp_internal_img(enum compdev_fmt fmt,
@@ -155,6 +205,7 @@ static int alloc_comp_internal_img(enum compdev_fmt fmt,
 
 	stride = compdev_get_stride(width, fmt);
 	size = stride * height;
+	size += get_chroma_size(stride, height, fmt);
 	size = PAGE_ALIGN(size);
 
 	if (protected)
@@ -455,6 +506,7 @@ enum compdev_fmt find_compatible_fmt(enum compdev_fmt fmt, bool rotation)
 		case COMPDEV_FMT_YVU420_SP:
 		case COMPDEV_FMT_YUV420_P:
 		case COMPDEV_FMT_YVU420_P:
+		case COMPDEV_FMT_YV12:
 			return COMPDEV_FMT_YUV422;
 		default:
 			return COMPDEV_FMT_RGBA8888;
@@ -472,6 +524,7 @@ enum compdev_fmt find_compatible_fmt(enum compdev_fmt fmt, bool rotation)
 		case COMPDEV_FMT_YVU420_SP:
 		case COMPDEV_FMT_YUV420_P:
 		case COMPDEV_FMT_YVU420_P:
+		case COMPDEV_FMT_YV12:
 			return COMPDEV_FMT_RGB888;
 		default:
 			return COMPDEV_FMT_RGBA8888;

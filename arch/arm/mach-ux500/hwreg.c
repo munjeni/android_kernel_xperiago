@@ -227,15 +227,14 @@ static struct hwreg_io_range hwreg_u8500_io_map[] = {
 	{.base = U8500_ASIC_ID_BASE,	.size = SZ_4K},
 
 	/* 0x17C4 0000 : 0x17C4 007C */
-//munjeni - this fail to ioremap, so I comented this
-/*	{.base = U8500_SCU_CD_R4_BASE,  .size = SZ_4K},
+	{.base = U8500_SCU_CD_R4_BASE,  .size = SZ_4K},
 
-	// 0x17D4 0000 : 0x17D4 041C
+	/* 0x17D4 0000 : 0x17D4 041C */
 	{.base = U8500_SCU_AD_R4_BASE,  .size = SZ_4K},
 
-	// 0x17E0 2000 : 0x17E0 2FFC
+	/* 0x17E0 2000 : 0x17E0 2FFC */
 	{.base = U8500_HSI2CMODEMR4_BASE, .size = SZ_4K},
-*/
+
 	{.base = 0, .size = 0, },
 
 };

@@ -1011,8 +1011,8 @@ struct tsl2772_platform_data tsl2772_data = {
 	.als_name = "tsl2772_als",
 	.raw_settings = NULL,
 	.parameters = {
-		.prox_th_min = 500,
-		.prox_th_max = 520,
+		.prox_th_min = 255,
+		.prox_th_max = 480,
 		.als_gate = 10,
 	},
 	.als_can_wake = false,

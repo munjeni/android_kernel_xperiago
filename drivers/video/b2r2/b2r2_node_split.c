@@ -2178,7 +2178,8 @@ static int configure_scale(
 	if (upsample) {
 		h_rsf /= 2;
 
-		if (b2r2_is_yuv420_fmt(src->fmt))
+		if (b2r2_is_yuv420_fmt(src->fmt) ||
+				b2r2_is_yvu420_fmt(src->fmt))
 			v_rsf /= 2;
 	}
 
@@ -2187,7 +2188,8 @@ static int configure_scale(
 	if (downsample) {
 		h_rsf *= 2;
 
-		if (b2r2_is_yuv420_fmt(dst->fmt))
+		if (b2r2_is_yuv420_fmt(dst->fmt) ||
+				b2r2_is_yvu420_fmt(dst->fmt))
 			v_rsf *= 2;
 	}
 
@@ -2407,7 +2409,8 @@ static void configure_src(struct b2r2_control *cont,
 			tmp_buf.win.x >>= 1;
 			tmp_buf.win.width = (tmp_buf.win.width + 1) / 2;
 
-			if (b2r2_is_yuv420_fmt(src->fmt)) {
+			if (b2r2_is_yuv420_fmt(src->fmt) ||
+					b2r2_is_yvu420_fmt(src->fmt)) {
 				tmp_buf.win.height =
 						(tmp_buf.win.height + 1) / 2;
 				tmp_buf.win.y >>= 1;
@@ -2425,7 +2428,8 @@ static void configure_src(struct b2r2_control *cont,
 			 * Each chroma buffer will have half as many values
 			 * per line as the luma buffer
 			 */
-			tmp_buf.pitch = (tmp_buf.pitch + 1) / 2;
+			tmp_buf.pitch = b2r2_get_chroma_pitch(src->pitch,
+				src->fmt);
 
 			/* Horizontal resolution is half */
 			tmp_buf.win.x >>= 1;
@@ -2435,16 +2439,22 @@ static void configure_src(struct b2r2_control *cont,
 			 * If the buffer is in YUV420 format, the vertical
 			 * resolution is half as well
 			 */
-			if (b2r2_is_yuv420_fmt(src->fmt)) {
+			if (b2r2_is_yuv420_fmt(src->fmt) ||
+					b2r2_is_yvu420_fmt(src->fmt)) {
 				tmp_buf.win.height =
 						(tmp_buf.win.height + 1) / 2;
 				tmp_buf.win.y >>= 1;
 			}
 		}
 
-		set_src_3(node, src->addr, src);                   /* Y */
-		set_src_2(node, tmp_buf.chroma_addr, &tmp_buf);    /* U */
-		set_src_1(node, tmp_buf.chroma_cr_addr, &tmp_buf); /* V */
+		set_src_3(node, src->addr, src);
+		if (b2r2_is_yvu_fmt(src->fmt)) {
+			set_src_1(node, tmp_buf.chroma_addr, &tmp_buf);
+			set_src_2(node, tmp_buf.chroma_cr_addr, &tmp_buf);
+		} else {
+			set_src_2(node, tmp_buf.chroma_addr, &tmp_buf);
+			set_src_1(node, tmp_buf.chroma_cr_addr, &tmp_buf);
+		}
 
 		break;
 	default:
@@ -2564,7 +2574,8 @@ static int configure_dst(struct b2r2_control *cont, struct b2r2_node *node,
 			 * resolution is half as well. Height must be rounded in
 			 * the same way as is done for width.
 			 */
-			if (b2r2_is_yuv420_fmt(dst->fmt)) {
+			if (b2r2_is_yuv420_fmt(dst->fmt) ||
+					b2r2_is_yvu420_fmt(dst->fmt)) {
 				dst_planes[1].win.y /= 2;
 				dst_planes[1].win.height =
 					(dst_planes[1].win.height + 1) / 2;
@@ -2575,10 +2586,8 @@ static int configure_dst(struct b2r2_control *cont, struct b2r2_node *node,
 			/* There will be a third plane as well */
 			nbr_planes = 3;
 
-			if (!b2r2_is_yuv444_fmt(dst->fmt)) {
-				/* The chroma planes have half the luma pitch */
-				dst_planes[1].pitch /= 2;
-			}
+			dst_planes[1].pitch = b2r2_get_chroma_pitch(
+				dst->pitch, dst->fmt);
 
 			memcpy(&dst_planes[2], &dst_planes[1],
 				sizeof(dst_planes[2]));
@@ -2764,41 +2773,14 @@ static void set_buf(struct b2r2_control *cont,
 
 		switch (buf->type) {
 		case B2R2_FMT_TYPE_SEMI_PLANAR:
-			buf->chroma_addr = (u32)(((u8 *)addr) +
-					buf->pitch * buf->height);
+			b2r2_get_cb_cr_addr(buf->addr, buf->pitch, buf->height,
+				buf->fmt, &buf->chroma_addr,
+				&buf->chroma_addr);
 			break;
 		case B2R2_FMT_TYPE_PLANAR:
-			if (b2r2_is_yuv422_fmt(buf->fmt) ||
-					b2r2_is_yuv420_fmt(buf->fmt)) {
-				buf->chroma_addr = (u32)(((u8 *)addr) +
-					buf->pitch * buf->height);
-			} else {
-				buf->chroma_cr_addr = (u32)(((u8 *)addr) +
-					buf->pitch * buf->height);
-			}
-			if (b2r2_is_yuv420_fmt(buf->fmt)) {
-				/*
-				 * Use ceil(height/2) in case
-				 * buffer height is not divisible by 2.
-				 */
-				buf->chroma_cr_addr =
-					(u32)(((u8 *)buf->chroma_addr) +
-					(buf->pitch >> 1) *
-					((buf->height + 1) >> 1));
-			} else if (b2r2_is_yuv422_fmt(buf->fmt)) {
-				buf->chroma_cr_addr =
-					(u32)(((u8 *)buf->chroma_addr) +
-					(buf->pitch >> 1) * buf->height);
-			} else if (b2r2_is_yvu420_fmt(buf->fmt)) {
-				buf->chroma_addr =
-					(u32)(((u8 *)buf->chroma_cr_addr) +
-					(buf->pitch >> 1) *
-					((buf->height + 1) >> 1));
-			} else if (b2r2_is_yvu422_fmt(buf->fmt)) {
-				buf->chroma_addr =
-					(u32)(((u8 *)buf->chroma_cr_addr) +
-					(buf->pitch >> 1) * buf->height);
-			}
+			b2r2_get_cb_cr_addr(buf->addr, buf->pitch, buf->height,
+				buf->fmt, &buf->chroma_addr,
+				&buf->chroma_cr_addr);
 			break;
 		default:
 			break;

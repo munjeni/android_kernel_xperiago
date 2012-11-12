@@ -10,6 +10,7 @@
 
 #include <linux/hwmem.h>
 #include <linux/err.h>
+#include <linux/slab.h>
 
 
 /* The UMP kernel API for hwmem has been mapped so that
@@ -63,7 +64,14 @@ ump_dd_handle ump_dd_handle_create_from_secure_id(ump_secure_id secure_id)
 
 unsigned long ump_dd_phys_block_count_get(ump_dd_handle memh)
 {
-	return 1;
+	size_t hwmem_mem_chunk_length;
+	int hwmem_result = 0;
+	struct hwmem_alloc *alloc = (struct hwmem_alloc *)memh;
+
+	/* Call hwmem_pin with mem_chunks set to NULL to get hwmem_mem_chunk_length */
+	hwmem_result = hwmem_pin(alloc, NULL, &hwmem_mem_chunk_length);
+
+	return hwmem_mem_chunk_length;
 }
 
 
@@ -72,34 +80,40 @@ ump_dd_status_code ump_dd_phys_blocks_get(ump_dd_handle memh,
                                           ump_dd_physical_block * blocks,
                                           unsigned long num_blocks)
 {
-	struct hwmem_mem_chunk hwmem_mem_chunk;
-	size_t hwmem_mem_chunk_length = 1;
+	struct hwmem_mem_chunk *hwmem_mem_chunks;
+	size_t hwmem_mem_chunk_length = num_blocks;
 
 	int hwmem_result;
+	int i;
+
 	struct hwmem_alloc *alloc = (struct hwmem_alloc *)memh;
+
+	hwmem_mem_chunks = (struct hwmem_mem_chunk *)kmalloc(sizeof(struct hwmem_mem_chunk)*num_blocks, GFP_KERNEL);
 
 	if (unlikely(blocks == NULL)) {
 		MALI_DEBUG_PRINT(1, ("%s: blocks == NULL\n",__func__));
 		return UMP_DD_INVALID;
 	}
 
-	if (unlikely(1 != num_blocks)) {
-		MALI_DEBUG_PRINT(1, ("%s: num_blocks == %d (!= 1)\n",__func__, num_blocks));
-		return UMP_DD_INVALID;
-	}
-
-	MALI_DEBUG_PRINT(5, ("Returning physical block information. Alloc: 0x%x\n", memh));
+	MALI_DEBUG_PRINT(5, ("Returning physical block information. Alloc: 0x%x num_blocks=%d\n", memh, num_blocks));
 
 	/* It might not look natural to pin here, but it matches the usage by the mali kernel module */
-	hwmem_result = hwmem_pin(alloc, &hwmem_mem_chunk, &hwmem_mem_chunk_length);
+	hwmem_result = hwmem_pin(alloc, hwmem_mem_chunks, &hwmem_mem_chunk_length);
 
 	if (unlikely(hwmem_result < 0)) {
 		MALI_DEBUG_PRINT(1, ("%s: Pin failed. Alloc: 0x%x\n",__func__, memh));
+		kfree(hwmem_mem_chunks);
 		return UMP_DD_INVALID;
 	}
 
-	blocks[0].addr = hwmem_mem_chunk.paddr;
-	blocks[0].size = hwmem_mem_chunk.size;
+	/* Scattered: Currently every page is one mem chunk. It's probably more
+	   efficient to create bigger mem chunks if possible when allocated pages
+	   are next to each other in memory */
+	for(i = 0; i < hwmem_mem_chunk_length; i++) {
+		blocks[i].addr = hwmem_mem_chunks[i].paddr;
+		blocks[i].size = hwmem_mem_chunks[i].size;
+	}
+	kfree(hwmem_mem_chunks);
 
 	hwmem_set_domain(alloc, HWMEM_ACCESS_READ | HWMEM_ACCESS_WRITE,
 		HWMEM_DOMAIN_SYNC, NULL);

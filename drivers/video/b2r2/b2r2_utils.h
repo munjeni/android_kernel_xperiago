@@ -77,6 +77,9 @@ bool b2r2_is_yvu420_fmt(enum b2r2_blt_fmt fmt);
 bool b2r2_is_yvu422_fmt(enum b2r2_blt_fmt fmt);
 bool b2r2_is_yuv444_fmt(enum b2r2_blt_fmt fmt);
 int b2r2_fmt_byte_pitch(enum b2r2_blt_fmt fmt, u32 width);
+u32 b2r2_get_chroma_pitch(u32 luma_pitch, enum b2r2_blt_fmt fmt);
+void b2r2_get_cb_cr_addr(u32 phy_base_addr, u32 luma_pitch, u32 height,
+		enum b2r2_blt_fmt fmt, u32 *cb_addr, u32 *cr_addr);
 enum b2r2_native_fmt b2r2_to_native_fmt(enum b2r2_blt_fmt fmt);
 u32 b2r2_to_RGB888(u32 color, const enum b2r2_blt_fmt fmt);
 enum b2r2_fmt_type b2r2_get_fmt_type(enum b2r2_blt_fmt fmt);

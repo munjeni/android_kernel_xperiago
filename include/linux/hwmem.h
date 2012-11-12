@@ -581,6 +581,7 @@ struct hwmem_allocator_api {
 	phys_addr_t (*get_alloc_paddr)(void *alloc);
 	void *(*get_alloc_kaddr)(void *instance, void *alloc);
 	size_t (*get_alloc_size)(void *alloc);
+	struct page **(*get_alloc_sglist)(void *alloc);
 };
 
 struct hwmem_mem_type_struct {

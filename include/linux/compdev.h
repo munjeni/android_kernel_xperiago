@@ -43,6 +43,7 @@ enum compdev_fmt {
 	COMPDEV_FMT_YVU420_SP,
 	COMPDEV_FMT_YUV420_P,
 	COMPDEV_FMT_YVU420_P,
+	COMPDEV_FMT_YV12,
 };
 
 struct compdev_size {

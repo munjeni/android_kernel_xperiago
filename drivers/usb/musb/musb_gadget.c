@@ -5,6 +5,7 @@
  * Copyright (C) 2005-2006 by Texas Instruments
  * Copyright (C) 2006-2007 Nokia Corporation
  * Copyright (C) 2009 MontaVista Software, Inc. <source@mvista.com>
+ * Copyright (C) 2012 Sony Mobile Communications AB
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -1361,7 +1362,7 @@ static int musb_gadget_queue(struct usb_ep *ep, struct usb_request *req,
 	spin_lock_irqsave(&musb->lock, lockflags);
 
 	/* don't queue if the ep is down */
-	if (!musb_ep->desc) {
+	if (!musb_ep || !musb_ep->desc) {
 		dev_dbg(musb->controller, "req %p queued to %s while ep %s\n",
 				req, ep->name, "disabled");
 		status = -ESHUTDOWN;

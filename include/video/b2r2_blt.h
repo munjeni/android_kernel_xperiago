@@ -161,6 +161,11 @@ enum b2r2_blt_fmt {
 	B2R2_BLT_FMT_24_BIT_VUY888 = 0x7F00000D,
 	B2R2_BLT_FMT_32_BIT_VUYA8888 = 0x7F00000E,
 	B2R2_BLT_FMT_16_BIT_ABGR4444 = 0x7F00000F,
+	/*
+	 * YV12 is a YVU420P format with alignment requirements
+	 * on luma and chroma stride
+	 */
+	B2R2_BLT_FMT_YV12 = 0x7F000010,
 };
 
 /**

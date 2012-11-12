@@ -48,6 +48,7 @@
 
 static struct rtc_device *ab8500_rtc;
 static struct delayed_work sync_work;
+static u32 resumed;
 
 static const u8 ab8500_rtc_time_regs[] = {
 	AB8500_RTC_WATCH_TMIN_HI_REG, AB8500_RTC_WATCH_TMIN_MID_REG,
@@ -396,13 +397,31 @@ static void ab8500_rtc_sync_work(struct work_struct *work)
 {
 	struct rtc_time r;
 	unsigned long t;
-	struct timespec ts;
+	struct timespec ts, sys_ts;
+	struct timex adjust;
 
 	ab8500_rtc_read_time(ab8500_rtc->dev.parent, &r);
 	rtc_tm_to_time(&r, &t);
 	set_normalized_timespec(&ts, (time_t) t, 0);
-	do_settimeofday(&ts);
-	rtc_hctohc(r);
+	getnstimeofday(&sys_ts);
+	/*
+	 * AB8500 RTC is more accurate then u8500 system clock.
+	 * Compensate for drift here but not if time differs more then 60s nor
+	 * when the drift is less than a second.
+	 * If diff is more then 60s then system time is considered changed
+	 * but not the rtc time and they should be kept different.
+	 * */
+	if ((abs(ts.tv_sec - sys_ts.tv_sec) < 60) &&
+		(ts.tv_sec != sys_ts.tv_sec) && !resumed) {
+		adjust.offset = (ts.tv_sec - sys_ts.tv_sec) * 1000000;
+		adjust.modes = ADJ_OFFSET_SINGLESHOT;
+		do_adjtimex(&adjust);
+		rtc_hctohc(r);
+	} else if (resumed) {
+		do_settimeofday(&ts);
+		resumed = 0;
+		rtc_hctohc(r);
+	}
 	/* Once every minute to match calibration */
 	schedule_delayed_work(&sync_work, 60 * HZ);
 }
@@ -495,6 +514,7 @@ static int ab8500_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 static int ab8500_rtc_resume(struct platform_device *pdev)
 {
 	/* Delay by 300ms to let resume finnish */
+	resumed = 1;
 	schedule_delayed_work(&sync_work, 3 * HZ / 10);
 	return 0;
 }

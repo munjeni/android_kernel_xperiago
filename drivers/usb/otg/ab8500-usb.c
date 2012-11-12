@@ -252,8 +252,6 @@ static void ab8500_usb_phy_enable(struct ab8500_usb *ab, bool sel_host)
 
 	clk_enable(ab->sysclk);
 
-	ab8500_usb_regulator_ctrl(ab, sel_host, true);
-
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 				     (char *)dev_name(ab->dev),
 				     PRCMU_QOS_APE_OPP_MAX);
@@ -361,6 +359,7 @@ static int ab8505_usb_link_status_update(struct ab8500_usb *ab,
 		}
 		if (ab->mode == USB_IDLE) {
 			ab->mode = USB_PERIPHERAL;
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -375,6 +374,7 @@ static int ab8505_usb_link_status_update(struct ab8500_usb *ab,
 		if (ab->mode == USB_PERIPHERAL) {
 			ab->mode = USB_HOST;
 			ab8500_usb_peri_phy_dis(ab);
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -382,6 +382,7 @@ static int ab8505_usb_link_status_update(struct ab8500_usb *ab,
 		}
 		if (ab->mode == USB_IDLE) {
 			ab->mode = USB_HOST;
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -455,6 +456,7 @@ static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 		if (ab->mode == USB_HOST) {
 			ab->mode = USB_PERIPHERAL;
 			ab8500_usb_host_phy_dis(ab);
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -462,6 +464,7 @@ static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 		}
 		if (ab->mode == USB_IDLE) {
 			ab->mode = USB_PERIPHERAL;
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -477,6 +480,7 @@ static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 		if (ab->mode == USB_PERIPHERAL) {
 			ab->mode = USB_HOST;
 			ab8500_usb_peri_phy_dis(ab);
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);
@@ -484,6 +488,7 @@ static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 		}
 		if (ab->mode == USB_IDLE) {
 			ab->mode = USB_HOST;
+			ab8500_usb_regulator_ctrl(ab, true, true);
 			atomic_notifier_call_chain(&ab->otg.notifier,
 						   USB_EVENT_PREPARE,
 						   &ab->vbus_draw);

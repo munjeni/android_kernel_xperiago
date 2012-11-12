@@ -151,9 +151,6 @@ static DEFINE_MUTEX(av8100_fwdl_mutex);
 static DEFINE_MUTEX(av8100_usrcnt_mutex);
 #define LOCK_AV8100_USRCNT mutex_lock(&av8100_usrcnt_mutex)
 #define UNLOCK_AV8100_USRCNT mutex_unlock(&av8100_usrcnt_mutex)
-static DEFINE_MUTEX(av8100_conf_mutex);
-#define LOCK_AV8100_CONF mutex_lock(&av8100_conf_mutex)
-#define UNLOCK_AV8100_CONF mutex_unlock(&av8100_conf_mutex)
 
 enum av8100_timer_flag {
 	TIMER_UNSET,
@@ -240,7 +237,6 @@ struct av8100_params {
 	bool disp_on;
 	bool busy;
 	u8 hdcp_state;
-	bool pwr_recover;
 };
 
 /**
@@ -306,8 +302,6 @@ struct av8100_device {
 	u8			chip_version;
 	struct early_suspend	early_suspend;
 	u32                     usr_cnt;
-	bool			usr_audio;
-	bool			usr_video;
 };
 
 static const unsigned int waittime_retry[10] =	{
@@ -646,13 +640,9 @@ static int av8100_suspend(struct device *dev)
 		(av8100_status_get().av8100_state > AV8100_OPMODE_SHUTDOWN);
 
 	if (adev->params.pre_suspend_power) {
-		if (adev->usr_audio) {
-			ret = -EBUSY;
-		} else {
-			ret = av8100_powerdown();
-			if (ret)
-				dev_err(dev, "av8100_powerdown failed\n");
-		}
+		ret = av8100_powerdown();
+		if (ret)
+			dev_err(dev, "av8100_powerdown failed\n");
 	}
 
 	return ret;
@@ -695,15 +685,9 @@ static int power_cycle(struct av8100_device *adev)
 {
 	if (av8100_status_get().av8100_state <= AV8100_OPMODE_SHUTDOWN)
 		return 0;
-	dev_dbg(adev->dev, "%s %d\n", __func__, adev->usr_audio);
-	if (!adev->usr_audio) {
-		av8100_powerdown();
-		set_hrtimer(adev, TIMER_POWERUP);
-	} else {
-		/* Simulate unplug in order to recover */
-		clr_plug_status(adev, AV8100_HDMI_PLUGIN);
-		adev->params.pwr_recover = true;
-	}
+	dev_dbg(adev->dev, "%s\n", __func__);
+	av8100_powerdown();
+	set_hrtimer(adev, TIMER_POWERUP);
 	return 0;
 }
 
@@ -778,8 +762,7 @@ static void to_scan_mode_2(struct av8100_device *adev)
 	if (adev->params.pulsing_5V == false)
 		set_hrtimer(adev, TIMER_1S);
 
-	if (av8100_status_get().av8100_state > AV8100_OPMODE_SCAN)
-		av8100_set_state(adev, AV8100_OPMODE_SCAN);
+	av8100_set_state(adev, AV8100_OPMODE_SCAN);
 }
 
 static int fix_cec(struct av8100_device *adev)
@@ -964,8 +947,6 @@ static void av8100_hpd_timer_event_handle(struct av8100_device *adev)
 
 	dev_dbg(adev->dev, "Thpd\n");
 
-	hrtimer_cancel(&adev->hrtimer);
-
 	/* Clear hpdi and cci interrupts */
 	if (av8100_reg_stby_pend_int_w(
 			AV8100_STANDBY_PENDING_INTERRUPT_HPDI_HIGH,
@@ -1025,12 +1006,9 @@ static void av8100_powerscan_timer_event_handle(struct av8100_device *adev)
 		set_plug_status(adev, AV8100_HDMI_PLUGIN);
 
 	} else {
-		if (!adev->usr_audio) {
-			av8100_powerdown();
-			usleep_range(AV8100_WAITTIME_1MS,
-						AV8100_WAITTIME_1MS_MAX);
-			av8100_powerup();
-		}
+		av8100_powerdown();
+		msleep(AV8100_WAITTIME_1MS);
+		av8100_powerup();
 		if (adev->params.pulsing_5V == false)
 			set_hrtimer(adev, TIMER_1S);
 		av8100_set_state(adev, AV8100_OPMODE_SCAN);
@@ -1063,8 +1041,8 @@ static void av8100_powerdown_timer_event_handle(struct av8100_device *adev)
 {
 	dev_dbg(adev->dev, "Tpwrdown\n");
 
-	if (!adev->usr_audio)
-		(void)av8100_powerdown();
+	(void)av8100_powerdown();
+	adev->params.busy = false;
 }
 
 static int cci_handle(struct av8100_device *adev, u8 hpdi)
@@ -1291,9 +1269,6 @@ static int av8100_int_event_handle(struct av8100_device *adev)
 	u8 cectxerr = 0;
 	u8 cecrx = 0;
 	u8 cectx = 0;
-
-	if (av8100_status_get().av8100_state <= AV8100_OPMODE_SHUTDOWN)
-		return 0;
 
 	/* Get hpdi and cci */
 	if (av8100_reg_stby_pend_int_r(&hpdi, NULL, NULL, &cci, NULL))
@@ -2785,7 +2760,7 @@ static int register_write_internal(u8 offset, u8 value)
 	return 0;
 }
 
-int av8100_hdmi_get(enum av8100_hdmi_user user)
+int av8100_hdmi_get(void)
 {
 	struct av8100_device *adev;
 	int usr_cnt;
@@ -2793,42 +2768,18 @@ int av8100_hdmi_get(enum av8100_hdmi_user user)
 	adev = devnr_to_adev(AV8100_DEVNR_DEFAULT);
 	if (!adev)
 		return  -EFAULT;
-	if (adev->timer_flag == TIMER_POWERDOWN) {
-		dev_dbg(adev->dev, "%s busy %d\n", __func__, user);
-		return  -EBUSY;
-	}
-	if (adev->params.suspended && (user == AV8100_HDMI_USER_AUDIO)) {
-		dev_dbg(adev->dev, "%s suspended %d\n", __func__, user);
-		return -EPERM;
-	}
 
 	LOCK_AV8100_USRCNT;
-	switch (user) {
-	case AV8100_HDMI_USER_AUDIO:
-		if (!adev->usr_audio) {
-			adev->usr_cnt++;
-			adev->usr_audio = true;
-		}
-		break;
-	case AV8100_HDMI_USER_VIDEO:
-		if (!adev->usr_video) {
-			adev->usr_cnt++;
-			adev->usr_video = true;
-		}
-		break;
-	default:
-		break;
-	}
+	adev->usr_cnt++;
 	usr_cnt = adev->usr_cnt;
 	UNLOCK_AV8100_USRCNT;
-
-	dev_dbg(adev->dev, "%s %d %d\n", __func__, usr_cnt, user);
+	dev_dbg(adev->dev, "%s %d\n", __func__, usr_cnt);
 
 	return usr_cnt;
 }
 EXPORT_SYMBOL(av8100_hdmi_get);
 
-int av8100_hdmi_put(enum av8100_hdmi_user user)
+int av8100_hdmi_put(void)
 {
 	struct av8100_device *adev;
 	int usr_cnt;
@@ -2838,41 +2789,16 @@ int av8100_hdmi_put(enum av8100_hdmi_user user)
 		return -EFAULT;
 
 	LOCK_AV8100_USRCNT;
-	switch (user) {
-	case AV8100_HDMI_USER_AUDIO:
-		if (adev->usr_audio) {
-			adev->usr_cnt--;
-			adev->usr_audio = false;
-		}
-		break;
-	case AV8100_HDMI_USER_VIDEO:
-		if (adev->usr_video) {
-			adev->usr_cnt--;
-			adev->usr_video = false;
-		}
-		break;
-	default:
-		break;
-	}
+	if (adev->usr_cnt)
+		adev->usr_cnt--;
 	usr_cnt = adev->usr_cnt;
-
-	dev_dbg(adev->dev, "%s %d %d\n", __func__, usr_cnt, user);
-
-	if (usr_cnt == 0) {
-		if (adev->params.suspended) {
-			adev->params.disp_on = false;
-			av8100_powerdown();
-		} else if (adev->params.plug_state == AV8100_UNPLUGGED) {
-			if (adev->params.pwr_recover) {
-				adev->params.pwr_recover = false;
-				av8100_powerdown();
-				av8100_powerup();
-			}
-			if (av8100_powerscan(true))
-				dev_err(adev->dev, "av8100_powerscan failed\n");
-		}
-	}
 	UNLOCK_AV8100_USRCNT;
+
+	dev_dbg(adev->dev, "%s %d\n", __func__, usr_cnt);
+
+	if (usr_cnt == 0)
+		if (av8100_powerscan(true))
+			dev_err(adev->dev, "av8100_powerscan failed\n");
 
 	return usr_cnt;
 }
@@ -2880,7 +2806,9 @@ EXPORT_SYMBOL(av8100_hdmi_put);
 
 int av8100_hdmi_video_off(void)
 {
+	int ret;
 	struct av8100_device *adev;
+	union av8100_configuration config;
 
 	adev = devnr_to_adev(AV8100_DEVNR_DEFAULT);
 	if (!adev)
@@ -2891,64 +2819,42 @@ int av8100_hdmi_video_off(void)
 	if (av8100_status_get().av8100_state < AV8100_OPMODE_VIDEO)
 		return 0;
 
-	/* Video is off: mask uovbi interrupts */
-	if (av8100_reg_gen_int_mask_w(
-			AV8100_GENERAL_INTERRUPT_MASK_EOCM_LOW,
-			AV8100_GENERAL_INTERRUPT_MASK_VSIM_LOW,
-			AV8100_GENERAL_INTERRUPT_MASK_VSOM_LOW,
-			adev->params.cecm,
-			adev->params.hdcpm,
-			AV8100_GENERAL_INTERRUPT_MASK_UOVBM_LOW,
-			AV8100_GENERAL_INTERRUPT_MASK_TEM_LOW))
-		dev_dbg(adev->dev, "av8100_reg_gen_int_mask_w err\n");
+	/* Get current av8100 video input format */
+	ret = av8100_conf_get(AV8100_COMMAND_VIDEO_INPUT_FORMAT,
+		&config);
+	if (ret) {
+		dev_err(adev->dev, "%s:av8100_conf_get "
+			"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
+			__func__);
+		return -EFAULT;
+	}
+
+	config.video_input_format.dsi_input_mode = AV8100_HDMI_DSI_OFF;
+
+	ret = av8100_conf_prep(AV8100_COMMAND_VIDEO_INPUT_FORMAT,
+		&config);
+	if (ret) {
+		dev_err(adev->dev, "%s:av8100_conf_prep "
+				"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
+				__func__);
+		return -EFAULT;
+	}
+
+	/* Video input */
+	ret = av8100_conf_w(AV8100_COMMAND_VIDEO_INPUT_FORMAT,
+		NULL, NULL, I2C_INTERFACE);
+	if (ret) {
+		dev_err(adev->dev, "%s:av8100_conf_w "
+				"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
+				__func__);
+		return -EFAULT;
+	}
 
 	av8100_set_state(adev, AV8100_OPMODE_IDLE);
 
 	return 0;
 }
 EXPORT_SYMBOL(av8100_hdmi_video_off);
-
-int av8100_hdmi_video_on(void)
-{
-	struct av8100_device *adev;
-
-	adev = devnr_to_adev(AV8100_DEVNR_DEFAULT);
-	if (!adev)
-		return -EFAULT;
-
-	dev_dbg(adev->dev, "%s\n", __func__);
-
-	if (av8100_status_get().av8100_state < AV8100_OPMODE_IDLE)
-		return 0;
-
-	/* Video is off: unmask uovbi interrupts */
-	if (av8100_reg_gen_int_mask_w(
-			AV8100_GENERAL_INTERRUPT_MASK_EOCM_LOW,
-			AV8100_GENERAL_INTERRUPT_MASK_VSIM_LOW,
-			AV8100_GENERAL_INTERRUPT_MASK_VSOM_LOW,
-			adev->params.cecm,
-			adev->params.hdcpm,
-			adev->params.uovbm,
-			AV8100_GENERAL_INTERRUPT_MASK_TEM_LOW))
-		dev_dbg(adev->dev, "av8100_reg_gen_int_mask_w err\n");
-
-	av8100_set_state(adev, AV8100_OPMODE_VIDEO);
-
-	return 0;
-}
-EXPORT_SYMBOL(av8100_hdmi_video_on);
-
-void av8100_conf_lock(void)
-{
-	LOCK_AV8100_CONF;
-}
-EXPORT_SYMBOL(av8100_conf_lock);
-
-void av8100_conf_unlock(void)
-{
-	UNLOCK_AV8100_CONF;
-}
-EXPORT_SYMBOL(av8100_conf_unlock);
 
 int av8100_powerwakeup(bool disp_user)
 {
@@ -2966,12 +2872,16 @@ int av8100_powerwakeup(bool disp_user)
 		goto av8100_powerwakeup_end;
 	}
 
-	if (disp_user)
+	if (disp_user) {
 		adev->params.disp_on = true;
+		if (av8100_status_get().av8100_state < AV8100_OPMODE_STANDBY)
+			ret = av8100_powerup();
+	} else {
+		if (av8100_status_get().av8100_state > AV8100_OPMODE_SHUTDOWN)
+			av8100_powerdown();
 
-	if (av8100_status_get().av8100_state < AV8100_OPMODE_STANDBY)
-		ret = av8100_powerup();
-
+		set_hrtimer(adev, TIMER_POWERUP);
+	}
 av8100_powerwakeup_end:
 	return ret;
 }
@@ -3016,8 +2926,7 @@ int av8100_powerscan(bool disp_user)
 		set_hrtimer(adev, TIMER_POWERDOWN);
 		adev->params.busy = true;
 	} else {
-		if (!adev->usr_audio)
-			ret = av8100_powerdown();
+		ret = av8100_powerdown();
 	}
 av8100_powerscan_end:
 	return ret;
@@ -3071,7 +2980,7 @@ int av8100_powerdown(void)
 		return -EFAULT;
 
 	adev->params.busy = false;
-	adev->flag = 0;
+	adev->flag &= ~AV8100_EVENTS;
 	adev->timer_flag = TIMER_UNSET;
 	hrtimer_cancel(&adev->hrtimer);
 	pdata = adev->dev->platform_data;
@@ -3434,10 +3343,8 @@ av8100_download_firmware_err:
 av8100_download_firmware_err2:
 	UNLOCK_AV8100_FWDL;
 
-	if (!adev->params.suspended) {
-		adev->flag |= AV8100_SCAN_TIMER_EVENT;
-		wake_up_interruptible(&adev->event);
-	}
+	adev->flag |= AV8100_SCAN_TIMER_EVENT;
+	wake_up_interruptible(&adev->event);
 
 	return retval;
 }
@@ -4851,11 +4758,7 @@ static void late_resume(struct early_suspend *data)
 		container_of(data, struct av8100_device, early_suspend);
 
 	adev->params.suspended = false;
-	if (!adev->params.disp_on) {
-		adev->flag &= ~AV8100_EVENTS;
-		hrtimer_cancel(&adev->hrtimer);
-		(void)av8100_powerwakeup(false);
-	}
+	(void)av8100_powerwakeup(false);
 }
 
 static int av8100_open(struct inode *inode, struct file *filp)

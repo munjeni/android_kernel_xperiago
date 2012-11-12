@@ -8,6 +8,9 @@
  * Author: Johan Palsson <johan.palsson@stericsson.com>
  * Author: Karl Komierowski <karl.komierowski@stericsson.com>
  * Author: Imre Sunyi <imre.sunyi@sonymobile.com>
+ *
+ * NOTE: This file has been modified by Sony Mobile Communication AB.
+ * Modification are licenced under the Licence.
  */
 
 #include <linux/init.h>
@@ -1964,11 +1967,11 @@ static int __devinit ab8500_chargalg_probe(struct platform_device *pdev)
 		ab8500_chargalg_external_power_changed;
 
 	/* Initilialize safety timer */
-	hrtimer_init(&di->safety_timer, CLOCK_REALTIME, HRTIMER_MODE_ABS);
+	hrtimer_init(&di->safety_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	di->safety_timer.function = ab8500_chargalg_safety_timer_expired;
 
 	/* Initilialize maintenance timer */
-	hrtimer_init(&di->maintenance_timer, CLOCK_REALTIME, HRTIMER_MODE_ABS);
+	hrtimer_init(&di->maintenance_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	di->maintenance_timer.function =
 		ab8500_chargalg_maintenance_timer_expired;
 

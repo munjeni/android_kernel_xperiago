@@ -5,7 +5,8 @@
 obj-y				:= clock.o cpu.o devices.o dcache.o \
 				   devices-common.o id.o pins.o \
 				   usb.o reboot_reasons.o timer.o \
-				   uart-db8500.o clock-debug.o
+				   uart-db8500.o clock-debug.o \
+				   irq-trigger.o
 obj-y				+= pm/ test/
 
 

@@ -36,7 +36,6 @@
 #define MILLI_TO_MICRO			1000
 #define FG_LSB_IN_MA			1627
 #define QLSB_NANO_AMP_HOURS_X10		1129
-#define CCEOC_IRQ_SKIP_CNT	1
 
 #define SEC_TO_SAMPLE(S)		(S * 4)
 
@@ -167,13 +166,13 @@ struct inst_curr_result_list {
  * struct ab8500_fg - ab8500 FG device information
  * @dev:		Pointer to the structure device
  * @node:		a list of AB8500 FGs, hence prepared for reentrance
- * @irq			holds the CCEOC interrupt number
+ * @irq:		holds the CCEOC interrupt number
  * @cc_irq:		average current irq number
  * @vbat:		Battery voltage in mV
  * @vbat_nom:		Nominal battery voltage in mV
- * @inst_curr:		Instantenous battery current in mA
+ * @inst_curr:		Instantaneous battery current in mA
  * @avg_curr:		Average battery current in mA
- * @bat_temp		battery temperature
+ * @bat_temp:		battery temperature
  * @fg_samples:		Number of samples used in the FG accumulation
  * @accu_charge:	Accumulated charge from the last conversion
  * @missed_accu_charge:	Accumulated charge that may be missed between
@@ -181,9 +180,8 @@ struct inst_curr_result_list {
  * @recovery_cnt_ms:	Counter for recovery mode
  * @high_curr_cnt_ms:	Counter for high current mode
  * @init_cnt:		Counter for init mode
- * @low_bat_cnt		Counter for number of consecutive low battery measures
- * @nbr_cceoc_irq_cnt	Counter for number of CCEOC irqs to skip
- * @high_curr_thr_pc	Percent counter of exceeded high current threshold
+ * @low_bat_cnt:	Counter for number of consecutive low battery measures
+ * @high_curr_thr_pc:	Percent counter of exceeded high current threshold
  * @calculate_missed_accu:
  *			Indicate if missing accu logic should be activated
  * @recovery_needed:	Indicate if recovery is needed
@@ -192,10 +190,10 @@ struct inst_curr_result_list {
  * @prohibit_uncomp_voltage_replace:
 			True when capacity is not allowed to be replaced with
 			uncompensated voltage
- * @calib_state		State during offset calibration
+ * @calib_state:		State during offset calibration
  * @discharge_state:	Current discharge state
  * @charge_state:	Current charge state
- * @ab8500_fg_complete	Completion struct used for the instant current reading
+ * @ab8500_fg_complete:	Completion struct used for the instant current reading
  * @flags:		Structure for information about events triggered
  * @bat_cap:		Structure for battery capacity specific parameters
  * @avg_cap:		Average capacity filter
@@ -205,11 +203,12 @@ struct inst_curr_result_list {
  * @bat:		Pointer to the ab8500_bm platform data
  * @fg_psy:		Structure that holds the FG specific battery properties
  * @fg_wq:		Work queue for running the FG algorithm
+ * @inst_curr_wq: Work queue for running the instantaneous current calculation
  * @avg_curr_wq:	Work queue for running the avg current calculation
  * @shutdown_wq:	Work queue for running shutdown determination
  * @fg_periodic_work:	Work to run the FG algorithm periodically
  * @fg_low_bat_work:	Work to check low bat condition
- * @fg_reinit_work	Work used to reset and reinitialise the FG algorithm
+ * @fg_reinit_work:	Work used to reset and reinitialise the FG algorithm
  * @fg_work:		Work to run the FG algorithm instantly
  * @fg_acc_cur_work:	Work to read the FG accumulator
  * @fg_check_hw_failure_work:	Work for checking HW state
@@ -237,7 +236,6 @@ struct ab8500_fg {
 	int high_curr_cnt_ms;
 	int init_cnt;
 	int low_bat_cnt;
-	int nbr_cceoc_irq_cnt;
 	int high_curr_thr_pc;
 	bool calculate_missed_accu;
 	bool recovery_needed;
@@ -258,6 +256,7 @@ struct ab8500_fg {
 	struct ab8500_bm_data *bat;
 	struct power_supply fg_psy;
 	struct workqueue_struct *fg_wq;
+	struct workqueue_struct *inst_curr_wq;
 	struct workqueue_struct *avg_curr_wq;
 	struct workqueue_struct *shutdown_wq;
 	struct delayed_work fg_periodic_work;
@@ -265,6 +264,7 @@ struct ab8500_fg {
 	struct delayed_work fg_reinit_work;
 	struct work_struct fg_work;
 	struct work_struct fg_acc_cur_work;
+	struct work_struct fg_cur_now_work;
 	struct delayed_work fg_check_hw_failure_work;
 	struct mutex cc_lock;
 	struct mutex shutdown_lock;
@@ -567,10 +567,6 @@ ab8500_fg_coulomb_counter(struct ab8500_fg *di, int samples, bool enable)
 
 		di->fg_samples = samples;
 
-		/*
-		 * how many CCEOC to skip after enabling CC
-		 */
-		di->nbr_cceoc_irq_cnt = CCEOC_IRQ_SKIP_CNT;
 	} else {
 		if (di->flags.fg_enabled) {
 			di->flags.fg_enabled = false;
@@ -718,8 +714,9 @@ ab8500_fg_inst_curr_finalize(struct ab8500_fg *di, int *res)
 	disable_irq(di->irq);
 
 	if (timeout == 0) {
-		dev_dbg(di->dev, "%s:%d: waiting for 'CCEOC' irq timeout, "
-				"use previous value\n", __func__, __LINE__);
+		dev_dbg(di->dev, "%s:%d: waiting for 'CCEOC' irq timeout(%d ms), "
+				"use previous value\n", __func__, __LINE__,
+				INS_CURR_TIMEOUT);
 		val = di->inst_curr;
 		goto leave;
 	}
@@ -2395,10 +2392,7 @@ static irqreturn_t ab8500_fg_cc_data_end_handler(int irq, void *_di)
 {
 	struct ab8500_fg *di = _di;
 
-	if (di->nbr_cceoc_irq_cnt > 0)
-		di->nbr_cceoc_irq_cnt--;
-	else
-		complete(&di->ab8500_fg_complete);
+	complete(&di->ab8500_fg_complete);
 
 	return IRQ_HANDLED;
 }
@@ -2484,6 +2478,23 @@ static irqreturn_t ab8500_fg_lowbatf_handler(int irq, void *_di)
 	return IRQ_HANDLED;
 }
 
+ /**
+ * ab8500_fg_current_now_work() - instantaneous battery current reader work
+ * @work:       pointer to the work_struct structure
+ *
+ * Reads the instantaneous battery current.
+ */
+static void ab8500_fg_current_now_work(struct work_struct *work)
+{
+	struct ab8500_fg *di = container_of(work, struct ab8500_fg,
+		fg_cur_now_work);
+
+	dev_dbg(di->dev, "Start reading instantaneous battery current\n");
+	di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+	dev_dbg(di->dev, "Finish reading instantaneous battery current: %d\n",
+		di->inst_curr);
+}
+
 /**
  * ab8500_fg_get_property() - get the fg properties
  * @psy:	pointer to the power_supply structure
@@ -2525,6 +2536,11 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 			val->intval = di->vbat * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		if (!di->flags.calibrate)
+			queue_work(di->inst_curr_wq, &di->fg_cur_now_work);
+		else
+			dev_dbg(di->dev, "CC not calibrated yet,"
+				"return inst_curr(%dmA)!\n", di->inst_curr);
 		val->intval = di->inst_curr * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_AVG:
@@ -3124,6 +3140,9 @@ static int __devexit ab8500_fg_remove(struct platform_device *pdev)
 
 	destroy_workqueue(di->fg_wq);
 	destroy_workqueue(di->shutdown_wq);
+	destroy_workqueue(di->avg_curr_wq);
+	destroy_workqueue(di->inst_curr_wq);
+
 	ab8500_fg_sysfs_exit(di);
 
 	flush_scheduled_work();
@@ -3157,6 +3176,13 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 
 	mutex_init(&di->cc_lock);
 	mutex_init(&di->shutdown_lock);
+
+	/*
+	 * Initialize completion used to notify completion and start
+	 * of inst current
+	 */
+	init_completion(&di->ab8500_fg_complete);
+	init_completion(&di->accu_done);
 
 	/* get parent data */
 	di->dev = &pdev->dev;
@@ -3227,11 +3253,22 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 		goto free_shutdown_wq;
 	}
 
+	/* work for instantaneous current */
+	di->inst_curr_wq =
+		create_singlethread_workqueue("ab8500_fg_inst_curr_wq");
+	if (di->inst_curr_wq == NULL) {
+		dev_err(di->dev, "failed to create work queue\n");
+		goto free_avg_curr_wq;
+	}
+
 	/* Init work for running the fg algorithm instantly */
 	INIT_WORK(&di->fg_work, ab8500_fg_instant_work);
 
 	/* Init work for getting the battery accumulated current */
 	INIT_WORK(&di->fg_acc_cur_work, ab8500_fg_acc_cur_work);
+
+	/* Init work for getting the battery instantaneous current */
+	INIT_WORK(&di->fg_cur_now_work, ab8500_fg_current_now_work);
 
 	/* Init work for reinitialising the fg algorithm */
 	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_reinit_work,
@@ -3253,26 +3290,12 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	ret = ab8500_fg_init_hw_registers(di);
 	if (ret) {
 		dev_err(di->dev, "failed to initialize registers\n");
-		goto free_shutdown_wq;
+		goto free_inst_curr_wq;
 	}
 
 	/* Consider battery unknown until we're informed otherwise */
 	di->flags.batt_unknown = true;
 	di->flags.batt_id_received = false;
-
-	/* Register FG power supply class */
-	ret = power_supply_register(di->dev, &di->fg_psy);
-	if (ret) {
-		dev_err(di->dev, "failed to register FG psy\n");
-		goto free_shutdown_wq;
-	}
-
-	/*
-	 * Initialize completion used to notify completion and start
-	 * of inst current
-	 */
-	init_completion(&di->ab8500_fg_complete);
-	init_completion(&di->accu_done);
 
 	/* Register interrupts */
 	for (i = 0; i < ARRAY_SIZE(ab8500_fg_irq); i++) {
@@ -3300,19 +3323,6 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, di);
 
-	ret = ab8500_fg_sysfs_init(di);
-	if (ret) {
-		dev_err(di->dev, "failed to create sysfs entry\n");
-		goto free_irq;
-	}
-
-	ret = ab8500_fg_sysfs_psy_create_attrs(di->fg_psy.dev);
-	if (ret) {
-		dev_err(di->dev, "failed to create FG psy\n");
-		ab8500_fg_sysfs_exit(di);
-		goto free_irq;
-	}
-
 	/* Calibrate the fg first time */
 	di->flags.calibrate = true;
 	di->calib_state = AB8500_FG_CALIB_INIT;
@@ -3320,22 +3330,45 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	/* Use room temp as default value until we get an update from driver. */
 	di->bat_temp = 210;
 
+	list_add_tail(&di->node, &ab8500_fg_list);
+
+	/* Register FG power supply class */
+	ret = power_supply_register(di->dev, &di->fg_psy);
+	if (ret) {
+		dev_err(di->dev, "failed to register FG psy\n");
+		goto free_irq;
+	}
+
+	ret = ab8500_fg_sysfs_init(di);
+	if (ret) {
+		dev_err(di->dev, "failed to create sysfs entry\n");
+		goto free_power_supply_register;
+	}
+
+	ret = ab8500_fg_sysfs_psy_create_attrs(di->fg_psy.dev);
+	if (ret) {
+		dev_err(di->dev, "failed to create FG psy\n");
+		ab8500_fg_sysfs_exit(di);
+		goto free_power_supply_register;
+	}
+
 	/* Run the FG algorithm */
 	queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
 
-	list_add_tail(&di->node, &ab8500_fg_list);
-
 	return ret;
 
-free_irq:
+free_power_supply_register:
 	power_supply_unregister(&di->fg_psy);
-
+free_irq:
 	/* We also have to free all successfully registered irqs */
 	for (i = i - 1; i >= 0; i--) {
 		irq = platform_get_irq_byname(pdev, ab8500_fg_irq[i].name);
 		free_irq(irq, di);
 	}
 
+free_inst_curr_wq:
+	destroy_workqueue(di->inst_curr_wq);
+free_avg_curr_wq:
 	destroy_workqueue(di->avg_curr_wq);
 free_shutdown_wq:
 	destroy_workqueue(di->shutdown_wq);

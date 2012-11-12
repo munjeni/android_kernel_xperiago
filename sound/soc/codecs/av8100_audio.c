@@ -179,14 +179,12 @@ static int av8100_codec_setup_hdmi_format(void)
 	config.hdmi_format.hdmi_mode = AV8100_HDMI_ON;
 	config.hdmi_format.hdmi_format = AV8100_HDMI;
 	config.hdmi_format.dvi_format = AV8100_DVI_CTRL_CTL0;
-	av8100_conf_lock();
 	ret = av8100_conf_prep(AV8100_COMMAND_HDMI, &config);
 	if (ret != 0) {
 		pr_err("%s: Setting hdmi_format failed "
 			"(av8100_conf_prep returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
 		return -EINVAL;
 	}
 	ret = av8100_conf_w(AV8100_COMMAND_HDMI,
@@ -198,11 +196,9 @@ static int av8100_codec_setup_hdmi_format(void)
 			"(av8100_conf_w returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
 		return -EINVAL;
 	}
 
-	av8100_conf_unlock();
 	return 0;
 }
 
@@ -262,14 +258,12 @@ static int av8100_codec_send_audio_infoframe(struct hdmi_audio_settings *as)
 
 	/* Send audio info-frame */
 	pr_info("%s: Sending audio info-frame.", __func__);
-	av8100_conf_lock();
 	ret = av8100_conf_prep(AV8100_COMMAND_INFOFRAMES, &config);
 	if (ret != 0) {
 		pr_err("%s: Sending audio info-frame failed "
 			"(av8100_conf_prep returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
 		return -EINVAL;
 	}
 	ret = av8100_conf_w(AV8100_COMMAND_INFOFRAMES,
@@ -281,11 +275,9 @@ static int av8100_codec_send_audio_infoframe(struct hdmi_audio_settings *as)
 			"(av8100_conf_w returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
 		return -EINVAL;
 	}
 
-	av8100_conf_unlock();
 	return 0;
 }
 
@@ -310,8 +302,7 @@ static int av8100_codec_pcm_startup(struct snd_pcm_substream *substream,
 	pr_debug("%s: Enter.\n", __func__);
 
 	/* Get HDMI resource */
-	if (av8100_hdmi_get(AV8100_HDMI_USER_AUDIO) < 0)
-		return -EBUSY;
+	av8100_hdmi_get();
 
 	/* Startup AV8100 if it is not already started */
 	ret = av8100_codec_powerup();
@@ -321,7 +312,7 @@ static int av8100_codec_pcm_startup(struct snd_pcm_substream *substream,
 			__func__,
 			ret);
 		/* Put HDMI resource */
-		av8100_hdmi_put(AV8100_HDMI_USER_AUDIO);
+		av8100_hdmi_put();
 		return -EINVAL;
 	}
 
@@ -332,7 +323,7 @@ static void av8100_codec_pcm_shutdown(struct snd_pcm_substream *substream,
 				struct snd_soc_dai *codec_dai)
 {
 	/* Put HDMI resource */
-	av8100_hdmi_put(AV8100_HDMI_USER_AUDIO);
+	av8100_hdmi_put();
 
 	pr_debug("%s: Enter.\n", __func__);
 }
@@ -376,14 +367,12 @@ static int av8100_codec_set_dai_fmt(struct snd_soc_dai *codec_dai,
 	config.audio_input_format.audio_word_lg	= AV8100_AUDIO_16BITS;
 	config.audio_input_format.audio_format = AV8100_AUDIO_LPCM_MODE;
 	config.audio_input_format.audio_mute = AV8100_AUDIO_MUTE_DISABLE;
-	av8100_conf_lock();
 	ret = av8100_conf_prep(AV8100_COMMAND_AUDIO_INPUT_FORMAT, &config);
 	if (ret != 0) {
 		pr_err("%s: Setting audio_input_format failed "
 			"(av8100_conf_prep returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
 		return -EINVAL;
 	}
 	ret = av8100_conf_w(AV8100_COMMAND_AUDIO_INPUT_FORMAT,
@@ -395,11 +384,9 @@ static int av8100_codec_set_dai_fmt(struct snd_soc_dai *codec_dai,
 			"(av8100_conf_w returned %d)!\n",
 			__func__,
 			ret);
-		av8100_conf_unlock();
-		return -EINVAL;
+			return -EINVAL;
 	}
 
-	av8100_conf_unlock();
 	return 0;
 }
 

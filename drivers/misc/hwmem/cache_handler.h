@@ -42,13 +42,14 @@ struct cach_buf {
 	/* Remaining hints are active */
 	enum hwmem_alloc_flags cache_settings;
 
+	enum hwmem_mem_type mem_type;
 	bool in_cpu_write_buf;
 	struct cach_range range_in_cpu_cache;
 	struct cach_range range_dirty_in_cpu_cache;
 	struct cach_range range_invalid_in_cpu_cache;
 };
 
-void cach_init_buf(struct cach_buf *buf,
+void cach_init_buf(struct cach_buf *buf, enum hwmem_mem_type,
 			enum hwmem_alloc_flags cache_settings, u32 size);
 
 void cach_set_buf_addrs(struct cach_buf *buf, void* vaddr, u32 paddr);

@@ -9,6 +9,7 @@
  *	Mian Yousaf Kaukab <mian.yousaf.kaukab@stericsson.com>
  *	Praveena Nadahally <praveen.nadahally@stericsson.com>
  *	Rajaram Regupathy <ragupathy.rajaram@stericsson.com>
+ * Copyright (C) 2012 Sony Mobile Communications AB
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -272,6 +273,12 @@ static int ux500_dma_is_compatible(struct dma_channel *channel,
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 
 	if (length <= Ux500_USB_DMA_MIN_TRANSFER_SIZE)
+		return 0;
+
+	/* In case when device has no config data
+	 * (i.e. usb ep is disconnected)
+	 */
+	if (!cdev || !cdev->config)
 		return 0;
 
 	list_for_each_entry(f, &cdev->config->functions, list) {

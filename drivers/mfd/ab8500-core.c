@@ -22,7 +22,7 @@
 #include <linux/mfd/abx500.h>
 #include <linux/mfd/ab8500.h>
 #include <linux/regulator/ab8500.h>
-
+#include <mach/irq-trigger.h>
 /*
  * Interrupt register offsets
  * Bank : 0x0E
@@ -298,11 +298,14 @@ static void ab8500_irq_sync_unlock(struct irq_data *data)
 {
 	struct ab8500 *ab8500 = irq_data_get_irq_chip_data(data);
 	int i;
+	bool trigger_irq = false;
+	int ret_val;
 
 	for (i = 0; i < ab8500->mask_size; i++) {
 		u8 old = ab8500->oldmask[i];
 		u8 new = ab8500->mask[i];
 		int reg;
+		u8 value;
 
 		if (new == old)
 			continue;
@@ -315,11 +318,38 @@ static void ab8500_irq_sync_unlock(struct irq_data *data)
 			is_ab8500_1p1_or_earlier(ab8500))
 			continue;
 
+		mutex_lock(&ab8500->latch_lock);
+
+		/*
+		 * Clear old latched interrupts, but remember interrupts which
+		 * are still valid to handle them when interrupt will be
+		 * triggered.
+		 */
+		get_register_interruptible(ab8500, AB8500_INTERRUPT,
+			AB8500_IT_LATCH1_REG + ab8500_irq_regoffset[i], &value);
+
+		ab8500->latch[i] = (ab8500->latch[i] | value) & ~old;
+
+		if (ab8500->latch[i] && !trigger_irq)
+			trigger_irq = true;
+
+		mutex_unlock(&ab8500->latch_lock);
+
 		ab8500->oldmask[i] = new;
 
 		reg = AB8500_IT_MASK1_REG + ab8500->irq_reg_offset[i];
 		set_register_interruptible(ab8500, AB8500_INTERRUPT, reg, new);
 	}
+
+	if (unlikely(trigger_irq)) {
+		ret_val = irq_trigger_set_gic_spi_pending_interrupt(
+			IRQ_DB8500_AB8500);
+
+		if (ret_val)
+			dev_err(ab8500->dev, "cannot re-trigger %d interrupt!\n",
+				IRQ_DB8500_AB8500);
+	}
+
 	atomic_dec(&ab8500->transfer_ongoing);
 	mutex_unlock(&ab8500->irq_lock);
 }
@@ -436,9 +466,25 @@ static irqreturn_t ab8500_irq(int irq, void *dev)
 		if (regoffset == 11 && is_ab8500_1p1_or_earlier(ab8500))
 			continue;
 
+		mutex_lock(&ab8500->latch_lock);
+
 		status = get_register_interruptible(ab8500, AB8500_INTERRUPT,
 			AB8500_IT_LATCH1_REG + regoffset, &value);
-		if (status < 0 || value == 0)
+
+		if (status < 0) {
+			mutex_unlock(&ab8500->latch_lock);
+			continue;
+		}
+
+		/*
+		 * OR with cached latch register value
+		 */
+		value |= ab8500->latch[i];
+		ab8500->latch[i] = 0;
+
+		mutex_unlock(&ab8500->latch_lock);
+
+		if (value == 0)
 			continue;
 
 		do {
@@ -1172,6 +1218,7 @@ int __devinit ab8500_init(struct ab8500 *ab8500, enum ab8500_version version)
 		ab8500->irq_base = plat->irq_base;
 
 	mutex_init(&ab8500->lock);
+	mutex_init(&ab8500->latch_lock);
 	mutex_init(&ab8500->irq_lock);
 	atomic_set(&ab8500->transfer_ongoing, 0);
 
@@ -1214,6 +1261,12 @@ int __devinit ab8500_init(struct ab8500 *ab8500, enum ab8500_version version)
 		ret = -ENOMEM;
 		goto out_freemask;
 	}
+	ab8500->latch = kzalloc(ab8500->mask_size, GFP_KERNEL);
+	if (!ab8500->latch) {
+		ret = -ENOMEM;
+		goto out_freeoldmask;
+	}
+
 	/*
 	 * ab8500 has switched off due to (SWITCH_OFF_STATUS):
 	 * 0x01 Swoff bit programming
@@ -1267,7 +1320,7 @@ int __devinit ab8500_init(struct ab8500 *ab8500, enum ab8500_version version)
 
 	ret = abx500_register_ops(ab8500->dev, &ab8500_ops);
 	if (ret)
-		goto out_freeoldmask;
+		goto out_freelatch;
 
 	for (i = 0; i < ab8500->mask_size; i++)
 		ab8500->mask[i] = ab8500->oldmask[i] = 0xff;
@@ -1275,7 +1328,7 @@ int __devinit ab8500_init(struct ab8500 *ab8500, enum ab8500_version version)
 	if (ab8500->irq_base) {
 		ret = ab8500_irq_init(ab8500);
 		if (ret)
-			goto out_freeoldmask;
+			goto out_freelatch;
 
 		/*  Activate this feature only in ab9540 */
 		/*  till tests are done on ab8500 1p2 or later*/
@@ -1343,6 +1396,8 @@ out_freeirq:
 out_removeirq:
 	if (ab8500->irq_base)
 		ab8500_irq_remove(ab8500);
+out_freelatch:
+	kfree(ab8500->latch);
 out_freeoldmask:
 	kfree(ab8500->oldmask);
 out_freemask:
@@ -1364,6 +1419,7 @@ int __devexit ab8500_exit(struct ab8500 *ab8500)
 	}
 	kfree(ab8500->oldmask);
 	kfree(ab8500->mask);
+	kfree(ab8500->latch);
 
 	return 0;
 }

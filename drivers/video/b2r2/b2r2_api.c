@@ -308,6 +308,7 @@ static bool is_scaling_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 	default:
 		return false;

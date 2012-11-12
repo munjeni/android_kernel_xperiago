@@ -1,5 +1,6 @@
 /*
  * Copyright (C) ST-Ericsson SA 2010
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * License Terms: GNU General Public License v2
  * Author: Srinidhi Kasagar <srinidhi.kasagar@stericsson.com>
@@ -222,6 +223,7 @@ enum ab8500_version {
  * struct ab8500 - ab8500 internal structure
  * @dev: parent device
  * @lock: read/write operations lock
+ * @latch_lock: latch array access lock
  * @irq_lock: genirq bus lock
  * @transfer_ongoing: 0 if no transfer ongoing
  * @irq: irq line
@@ -234,6 +236,7 @@ enum ab8500_version {
  * @tx_buf: tx buf for SPI
  * @mask: cache of IRQ regs for bus lock
  * @oldmask: cache of previous IRQ regs for bus lock
+ * @latch: outstanding content of LatchX register
  * @mask_size: Actual number of valid entries in mask[], oldmask[] and
  * irq_reg_offset
  * @irq_reg_offset: Array of offsets into IRQ registers
@@ -241,6 +244,7 @@ enum ab8500_version {
 struct ab8500 {
 	struct device	*dev;
 	struct mutex	lock;
+	struct mutex	latch_lock;
 	struct mutex	irq_lock;
 	atomic_t	transfer_ongoing;
 	int		irq_base;
@@ -257,6 +261,7 @@ struct ab8500 {
 
 	u8 *mask;
 	u8 *oldmask;
+	u8 *latch;
 	int mask_size;
 	const int *irq_reg_offset;
 };

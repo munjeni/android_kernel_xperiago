@@ -324,6 +324,7 @@ int b2r2_get_fmt_bpp(struct device *dev, enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12:
 		return 12;
 
 	case B2R2_BLT_FMT_16_BIT_ARGB4444:
@@ -378,6 +379,7 @@ int b2r2_get_fmt_y_bpp(struct device *dev, enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_32_BIT_AYUV8888:
 	case B2R2_BLT_FMT_24_BIT_VUY888:
 	case B2R2_BLT_FMT_32_BIT_VUYA8888:
+	case B2R2_BLT_FMT_YV12:
 		return 8;
 
 	default:
@@ -476,6 +478,7 @@ bool b2r2_is_ycbcrp_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 
 	default:
@@ -491,6 +494,7 @@ bool b2r2_is_ycbcr420_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 
 	default:
@@ -541,6 +545,20 @@ bool b2r2_is_mb_fmt(enum b2r2_blt_fmt fmt)
 	}
 }
 
+u32 b2r2_get_chroma_pitch(u32 luma_pitch, enum b2r2_blt_fmt fmt)
+{
+	switch (fmt) {
+	case B2R2_BLT_FMT_YV12:
+		return b2r2_align_up(luma_pitch >> 1, 16);
+	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
+	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
+		return luma_pitch;
+	default:
+		return luma_pitch >> 1;
+	}
+}
+
 u32 b2r2_calc_pitch_from_width(struct device *dev,
 		s32 width, enum b2r2_blt_fmt fmt)
 {
@@ -550,6 +568,9 @@ u32 b2r2_calc_pitch_from_width(struct device *dev,
 	} else if (b2r2_is_ycbcrsp_fmt(fmt) || b2r2_is_ycbcrp_fmt(fmt)) {
 		return (u32)b2r2_div_round_up(width *
 			b2r2_get_fmt_y_bpp(dev, fmt), 8);
+	} else if (b2r2_is_mb_fmt(fmt)) {
+		return b2r2_align_up((u32)b2r2_div_round_up(width *
+			b2r2_get_fmt_y_bpp(dev, fmt), 8), 16);
 	} else {
 		b2r2_log_err(dev, "%s: Internal error! "
 			"Pitchless format supplied.\n",
@@ -802,6 +823,7 @@ bool b2r2_is_yuv_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 	default:
 		return false;
@@ -818,6 +840,7 @@ bool b2r2_is_yvu_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 	default:
 		return false;
@@ -832,9 +855,7 @@ bool b2r2_is_yuv420_fmt(enum b2r2_blt_fmt fmt)
 
 	switch (fmt) {
 	case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
-	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMIPLANAR_MB_STE:
 		return true;
 	default:
@@ -845,11 +866,8 @@ bool b2r2_is_yuv420_fmt(enum b2r2_blt_fmt fmt)
 bool b2r2_is_yuv422_fmt(enum b2r2_blt_fmt fmt)
 {
 	switch (fmt) {
-	case B2R2_BLT_FMT_CB_Y_CR_Y:
 	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
-	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR:
-	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMIPLANAR_MB_STE:
 		return true;
 	default:
@@ -865,6 +883,7 @@ bool b2r2_is_yvu420_fmt(enum b2r2_blt_fmt fmt)
 	switch (fmt) {
 	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return true;
 	default:
 		return false;
@@ -928,6 +947,7 @@ int b2r2_fmt_byte_pitch(enum b2r2_blt_fmt fmt, u32 width)
 	case B2R2_BLT_FMT_YUV422_PACKED_SEMI_PLANAR:       /* Fall through */
 	case B2R2_BLT_FMT_YVU422_PACKED_SEMI_PLANAR:       /* Fall through */
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return width;
 
 	case B2R2_BLT_FMT_16_BIT_ARGB4444: /* Fall through */
@@ -1004,6 +1024,7 @@ enum b2r2_native_fmt b2r2_to_native_fmt(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return B2R2_NATIVE_YUV;
 	default:
 		/* Should never ever happen */
@@ -1096,6 +1117,7 @@ enum b2r2_fmt_type b2r2_get_fmt_type(enum b2r2_blt_fmt fmt)
 	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
 	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
 		return B2R2_FMT_TYPE_PLANAR;
 	case B2R2_BLT_FMT_YUV420_PACKED_SEMI_PLANAR:
 	case B2R2_BLT_FMT_YVU420_PACKED_SEMI_PLANAR:
@@ -1405,7 +1427,44 @@ const char *b2r2_fmt_to_string(enum b2r2_blt_fmt fmt)
 		return "VUY888";
 	case B2R2_BLT_FMT_32_BIT_VUYA8888:
 		return "VUYA8888";
+	case B2R2_BLT_FMT_YV12:
+		return "YV12";
 	default:
 		return "UNKNOWN";
+	}
+}
+
+void b2r2_get_cb_cr_addr(u32 phy_base_addr, u32 luma_pitch, u32 height,
+		enum b2r2_blt_fmt fmt, u32 *cb_addr, u32 *cr_addr)
+{
+	u32 chroma_pitch = b2r2_get_chroma_pitch(luma_pitch, fmt);
+
+	if (cr_addr == NULL || cb_addr == NULL)
+		return;
+
+	if (b2r2_is_yvu_fmt(fmt))
+		*cr_addr = phy_base_addr + luma_pitch * height;
+	else
+		*cb_addr = phy_base_addr + luma_pitch * height;
+
+	switch (fmt) {
+	case B2R2_BLT_FMT_YUV420_PACKED_PLANAR:
+		*cr_addr = *cb_addr + chroma_pitch * (height >> 1);
+		break;
+	case B2R2_BLT_FMT_YVU420_PACKED_PLANAR:
+	case B2R2_BLT_FMT_YV12:
+		*cb_addr = *cr_addr + chroma_pitch * (height >> 1);
+		break;
+	case B2R2_BLT_FMT_YUV422_PACKED_PLANAR:
+		*cr_addr = *cb_addr + chroma_pitch * height;
+		break;
+	case B2R2_BLT_FMT_YVU422_PACKED_PLANAR:
+		*cb_addr = *cr_addr + chroma_pitch * height;
+		break;
+	case B2R2_BLT_FMT_YUV444_PACKED_PLANAR:
+		*cr_addr = *cb_addr + chroma_pitch * height;
+		break;
+	default:
+		break;
 	}
 }

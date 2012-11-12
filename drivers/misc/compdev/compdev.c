@@ -1,5 +1,6 @@
 /*
  * Copyright (C) ST-Ericsson SA 2011
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * Display overlay compositer device driver
  *
@@ -10,6 +11,9 @@
  * for ST-Ericsson.
  *
  * License terms: GNU General Public License (GPL), version 2.
+ *
+ * NOTE: This file has been modified by Sony Mobile Communications AB.
+ * Modifications are licensed under the License.
  */
 
 #include <linux/kernel.h>
@@ -321,7 +325,7 @@ static int compdev_setup_ovly(struct compdev_img *img,
 		}
 
 		rgn.size = rgn.end = buffer->size;
-		ret = hwmem_set_domain(buffer->alloc, HWMEM_ACCESS_READ,
+		ret = hwmem_set_domain(buffer->alloc, access,
 			HWMEM_DOMAIN_SYNC, &rgn);
 		if (ret)
 			dev_warn(dss_ctx->dev,
@@ -556,6 +560,7 @@ static int compdev_post_buffers_dss(struct dss_context *dss_ctx,
 		if ((fb_img->flags & COMPDEV_PROTECTED_FLAG) &&
 			(mcde_dss_secure_output(dss_ctx->ddev) == false)) {
 			disable_overlay(dss_ctx->ovly[i]);
+			update_ovly[i] = true;
 		} else {
 			ret = compdev_setup_ovly(fb_img,
 					&dss_ctx->ovly_buffer[i],
@@ -577,6 +582,7 @@ static int compdev_post_buffers_dss(struct dss_context *dss_ctx,
 		if ((ovly_img->flags & COMPDEV_PROTECTED_FLAG) &&
 			(mcde_dss_secure_output(dss_ctx->ddev) == false)) {
 			disable_overlay(dss_ctx->ovly[i]);
+			update_ovly[i] = true;
 		} else {
 			ret = compdev_setup_ovly(ovly_img,
 					&dss_ctx->ovly_buffer[i],

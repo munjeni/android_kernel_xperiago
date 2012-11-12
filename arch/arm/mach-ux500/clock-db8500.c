@@ -69,17 +69,7 @@ static int request_sysclk(bool enable)
 
 static int sysclk_enable(struct clk *clk)
 {
-	static bool swat_enable;
 	int r;
-
-	if (!swat_enable) {
-		r = ab8500_sysctrl_set(AB8500_SWATCTRL,
-			AB8500_SWATCTRL_SWATENABLE);
-		if (r)
-			return r;
-
-		swat_enable = true;
-	}
 
 	r = request_sysclk(true);
 	if (r)
@@ -926,6 +916,10 @@ static void sysclk_init_disable(struct work_struct *not_used)
 				goto err_sysclk;
 		}
 	}
+	/* Disable SWAT  */
+	if (ab8500_sysctrl_clear(AB8500_SWATCTRL, AB8500_SWATCTRL_SWATENABLE))
+		goto err_swat;
+
 	goto unlock_and_exit;
 
 err_sysclk:

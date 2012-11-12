@@ -79,7 +79,10 @@ void *cona_create(const char *name, phys_addr_t region_paddr,
 {
 	int ret;
 	struct instance *instance;
-	struct vm_struct *vm_area;
+	struct vm_struct *vm_area = NULL;
+#ifdef CONFIG_FLATMEM
+	phys_addr_t region_end = region_paddr + region_size;
+#endif
 
 	if (region_size == 0)
 		return ERR_PTR(-EINVAL);
@@ -94,14 +97,36 @@ void *cona_create(const char *name, phys_addr_t region_paddr,
 	instance->region_paddr = region_paddr;
 	instance->region_size = region_size;
 
-	vm_area = get_vm_area(region_size, VM_IOREMAP);
-	if (vm_area == NULL) {
-		printk(KERN_WARNING "CONA: Failed to allocate %u bytes"
-					" kernel virtual memory", region_size);
-		ret = -ENOMSG;
-		goto vmem_alloc_failed;
+#ifdef CONFIG_FLATMEM
+	/*
+	 * Map hwmem physical memory to the holes in the kernel LOMEM virtual
+	 * address if LOMEM region is enough to contain the whole HWMEM.
+	 * otherwise map hwmem to VMALLOC region.
+	 */
+	if (__phys_to_virt(region_end) > __phys_to_virt(region_paddr)
+	    && __phys_to_virt(region_end) < (unsigned long)high_memory) {
+		instance->region_kaddr = phys_to_virt(region_paddr);
+		pr_info("hwmem: %s map to LOMEM, start: 0x%p, end: 0x%p\n",
+			name,
+			phys_to_virt(region_paddr),
+			phys_to_virt(region_paddr+region_size));
 	}
-	instance->region_kaddr = vm_area->addr;
+#endif
+
+	if (!instance->region_kaddr) {
+		vm_area = get_vm_area(region_size, VM_IOREMAP);
+		if (vm_area == NULL) {
+			pr_err("CONA: Failed to allocate %u bytes kernel virtual memory",
+			       region_size);
+			ret = -ENOMSG;
+			goto vmem_alloc_failed;
+		}
+
+		instance->region_kaddr = vm_area->addr;
+		pr_info("hwmem: %s map to VMALLOC, address: 0x%p\n",
+			name,
+			instance->region_kaddr);
+	}
 
 	/*
 	 * This newly created memory area is unsused.
@@ -121,10 +146,11 @@ void *cona_create(const char *name, phys_addr_t region_paddr,
 	return instance;
 
 init_alloc_list_failed:
-	vm_area = remove_vm_area(instance->region_kaddr);
-	if (vm_area == NULL)
-		printk(KERN_ERR "CONA: Failed to free kernel virtual memory,"
-							" resource leak!\n");
+	if (vm_area) {
+		vm_area = remove_vm_area(instance->region_kaddr);
+		if (vm_area == NULL)
+			pr_err("CONA: Failed to free kernel virtual memory, resource leak!\n");
+	}
 
 	kfree(vm_area);
 vmem_alloc_failed:

@@ -61,6 +61,10 @@ struct hwmem_alloc {
 	/* Cache handling */
 	struct cach_buf cach_buf;
 
+	/* Scattered allocation parameters */
+	struct page **sglist;
+	size_t nr_of_pages;
+
 #ifdef CONFIG_DEBUG_FS
 	/* Debug */
 	void *creator;
@@ -165,24 +169,37 @@ static int kmap_alloc(struct hwmem_alloc *alloc)
 	int ret;
 	pgprot_t pgprot;
 	void *alloc_kaddr;
+	void *vmap_addr;
 
-	alloc_kaddr = alloc->mem_type->allocator_api.get_alloc_kaddr(
-		alloc->mem_type->allocator_instance, alloc->allocator_hndl);
-	if (IS_ERR(alloc_kaddr))
-		return PTR_ERR(alloc_kaddr);
+	if (alloc->mem_type->id != HWMEM_MEM_SCATTERED_SYS) {
+		alloc_kaddr = alloc->mem_type->allocator_api.get_alloc_kaddr(
+			alloc->mem_type->allocator_instance, alloc->allocator_hndl);
+		if (IS_ERR(alloc_kaddr))
+			return PTR_ERR(alloc_kaddr);
+	}
 
 	pgprot = PAGE_KERNEL;
 	cach_set_pgprot_cache_options(&alloc->cach_buf, &pgprot);
 
-	ret = ioremap_page_range((unsigned long)alloc_kaddr,
-		(unsigned long)alloc_kaddr + alloc->size, alloc->paddr, pgprot);
-	if (ret < 0) {
-		dev_warn(&hwdev->dev, "Failed to map %#x - %#x", alloc->paddr,
-						alloc->paddr + alloc->size);
-		return ret;
-	}
+	if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS) {
+		/* map an array of pages into virtually contiguous space */
+		vmap_addr = vmap(alloc->sglist, alloc->nr_of_pages, VM_MAP, PAGE_KERNEL);
+		if (IS_ERR_OR_NULL(vmap_addr)) {
+			dev_warn(&hwdev->dev, "Failed to vmap size %d", alloc->size);
+			return -ENOMEM;
+		}
+		alloc->kaddr = vmap_addr;
+	} else { /* contiguous or protected */
+		ret = ioremap_page_range((unsigned long)alloc_kaddr,
+			(unsigned long)alloc_kaddr + alloc->size, alloc->paddr, pgprot);
+		if (ret < 0) {
+			dev_warn(&hwdev->dev, "Failed to map %#x - %#x", alloc->paddr,
+							alloc->paddr + alloc->size);
+			return ret;
+		}
 
-	alloc->kaddr = alloc_kaddr;
+		alloc->kaddr = alloc_kaddr;
+	}
 
 	return 0;
 }
@@ -192,7 +209,10 @@ static void kunmap_alloc(struct hwmem_alloc *alloc)
 	if (alloc->kaddr == NULL)
 		return;
 
-	unmap_kernel_range((unsigned long)alloc->kaddr, alloc->size);
+	if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS)
+		vunmap(alloc->kaddr); /* release virtual mapping obtained by vmap() */
+	else /* contiguous or protected */
+		unmap_kernel_range((unsigned long)alloc->kaddr, alloc->size);
 
 	alloc->kaddr = NULL;
 }
@@ -245,6 +265,7 @@ struct hwmem_alloc *hwmem_alloc(size_t size, enum hwmem_alloc_flags flags,
 	alloc->creator_tgid = task_tgid_nr(current);
 #endif
 	alloc->mem_type = resolve_mem_type(mem_type);
+
 	if (IS_ERR(alloc->mem_type)) {
 		ret = PTR_ERR(alloc->mem_type);
 		goto resolve_mem_type_failed;
@@ -257,15 +278,29 @@ struct hwmem_alloc *hwmem_alloc(size_t size, enum hwmem_alloc_flags flags,
 		goto allocator_failed;
 	}
 
-	alloc->paddr = alloc->mem_type->allocator_api.get_alloc_paddr(
-							alloc->allocator_hndl);
-	alloc->size = alloc->mem_type->allocator_api.get_alloc_size(
-							alloc->allocator_hndl);
+	if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS) {
+		alloc->size = alloc->mem_type->allocator_api.get_alloc_size(
+								alloc->allocator_hndl);
+		alloc->nr_of_pages = alloc->size >> PAGE_SHIFT;
+		alloc->sglist = alloc->mem_type->allocator_api.get_alloc_sglist(
+								alloc->allocator_hndl);
+		alloc->paddr = 0;
+	} else {  /* contiguous or protected */
+		alloc->paddr = alloc->mem_type->allocator_api.get_alloc_paddr(
+								alloc->allocator_hndl);
+		alloc->size = alloc->mem_type->allocator_api.get_alloc_size(
+								alloc->allocator_hndl);
+	}
 
-	cach_init_buf(&alloc->cach_buf, alloc->flags, alloc->size);
+	cach_init_buf(&alloc->cach_buf,
+		      alloc->mem_type->id,
+		      alloc->flags,
+		      alloc->size);
+
 	ret = kmap_alloc(alloc);
 	if (ret < 0)
 		goto kmap_alloc_failed;
+
 	cach_set_buf_addrs(&alloc->cach_buf, alloc->kaddr, alloc->paddr);
 
 	list_add_tail(&alloc->list, &alloc_list);
@@ -315,16 +350,36 @@ EXPORT_SYMBOL(hwmem_set_domain);
 int hwmem_pin(struct hwmem_alloc *alloc, struct hwmem_mem_chunk *mem_chunks,
 							u32 *mem_chunks_length)
 {
+	/* Calculate hwmem_mem_chunk_length */
+	if (mem_chunks == NULL) {
+		if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS)
+			*mem_chunks_length = alloc->nr_of_pages;
+		else
+			*mem_chunks_length = 1;
+
+		return 0;
+	}
+
 	if (*mem_chunks_length < 1) {
 		*mem_chunks_length = 1;
+		printk(KERN_ERR "HWMEM: hwmem_pin mem_chunks_length < 1\n");
 		return -ENOSPC;
 	}
 
 	mutex_lock(&lock);
 
-	mem_chunks[0].paddr = alloc->paddr;
-	mem_chunks[0].size = alloc->size;
-	*mem_chunks_length = 1;
+	if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS) {
+		int i;
+		for (i = 0; i < alloc->nr_of_pages; i++) {
+			mem_chunks[i].paddr = page_to_phys(alloc->sglist[i]);
+			mem_chunks[i].size = PAGE_SIZE;
+		}
+		*mem_chunks_length = alloc->nr_of_pages;
+	} else { /* contiguous or protected */
+		mem_chunks[0].paddr = alloc->paddr;
+		mem_chunks[0].size = alloc->size;
+		*mem_chunks_length = 1;
+	}
 
 	mutex_unlock(&lock);
 
@@ -349,7 +404,9 @@ static void vm_close(struct vm_area_struct *vma)
 
 int hwmem_mmap(struct hwmem_alloc *alloc, struct vm_area_struct *vma)
 {
+	unsigned long temp_addr;
 	int ret = 0;
+	int i = 0;
 	unsigned long vma_size = vma->vm_end - vma->vm_start;
 	enum hwmem_access access;
 	mutex_lock(&lock);
@@ -380,11 +437,21 @@ int hwmem_mmap(struct hwmem_alloc *alloc, struct vm_area_struct *vma)
 	atomic_inc(&alloc->ref_cnt);
 	vma->vm_ops = &vm_ops;
 
-	ret = remap_pfn_range(vma, vma->vm_start, alloc->paddr >> PAGE_SHIFT,
-		min(vma_size, (unsigned long)alloc->size), vma->vm_page_prot);
-	if (ret < 0)
-		goto map_failed;
+	if (alloc->mem_type->id == HWMEM_MEM_SCATTERED_SYS) {
+		/* VM_MIXEDMAP can contain "struct page" and pure PFN pages */
+		vma->vm_flags |= VM_MIXEDMAP;
+		temp_addr = vma->vm_start;
 
+		for (i = 0; i < alloc->nr_of_pages; i++) {
+			vm_insert_page(vma, temp_addr, alloc->sglist[i]);
+			temp_addr += PAGE_SIZE;
+		}
+	} else { /* contiguous or protected */
+		ret = remap_pfn_range(vma, vma->vm_start, alloc->paddr >> PAGE_SHIFT,
+			min(vma_size, (unsigned long)alloc->size), vma->vm_page_prot);
+		if (ret < 0)
+			goto map_failed;
+	}
 	goto out;
 
 map_failed:

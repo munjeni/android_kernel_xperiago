@@ -972,48 +972,34 @@ static int hdmi_set_video_mode(
 		}
 	}
 
-	av8100_conf_lock();
-
 	/*
 	 * Don't look at dev->port->hdmi_sdtv_switch; it states only which
 	 * one should be started, not which one is currently working
 	 */
-	if (av8100_conf_get(AV8100_COMMAND_HDMI, &av8100_config)) {
-		ret = -EFAULT;
-		goto hdmi_set_video_mode_end;
-	}
+	if (av8100_conf_get(AV8100_COMMAND_HDMI, &av8100_config))
+		return -EFAULT;
 	if (av8100_config.hdmi_format.hdmi_mode == AV8100_HDMI_ON) {
 		/* Set HDMI mode to OFF */
 		av8100_config.hdmi_format.hdmi_mode = AV8100_HDMI_OFF;
 		av8100_config.hdmi_format.dvi_format = AV8100_DVI_CTRL_CTL0;
 		av8100_config.hdmi_format.hdmi_format = AV8100_HDMI;
-		if (av8100_conf_prep(AV8100_COMMAND_HDMI, &av8100_config)) {
-			ret = -EFAULT;
-			goto hdmi_set_video_mode_end;
-		}
+		if (av8100_conf_prep(AV8100_COMMAND_HDMI, &av8100_config))
+			return -EFAULT;
 
 		if (av8100_conf_w(AV8100_COMMAND_HDMI, NULL, NULL,
-							I2C_INTERFACE)) {
-			ret = -EFAULT;
-			goto hdmi_set_video_mode_end;
-		}
+								I2C_INTERFACE))
+			return -EFAULT;
 	}
-	if (av8100_conf_get(AV8100_COMMAND_DENC, &av8100_config)) {
-		ret = -EFAULT;
-		goto hdmi_set_video_mode_end;
-	}
+	if (av8100_conf_get(AV8100_COMMAND_DENC, &av8100_config))
+		return -EFAULT;
 	if (av8100_config.denc_format.enable) {
 		/* Turn off DENC */
 		av8100_config.denc_format.enable = 0;
-		if (av8100_conf_prep(AV8100_COMMAND_DENC, &av8100_config)) {
-			ret = -EFAULT;
-			goto hdmi_set_video_mode_end;
-		}
+		if (av8100_conf_prep(AV8100_COMMAND_DENC, &av8100_config))
+			return -EFAULT;
 		if (av8100_conf_w(AV8100_COMMAND_DENC, NULL, NULL,
-							I2C_INTERFACE)) {
-			ret = -EFAULT;
-			goto hdmi_set_video_mode_end;
-		}
+								I2C_INTERFACE))
+			return -EFAULT;
 	}
 
 	/* Get current av8100 video output format */
@@ -1023,7 +1009,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_get "
 			"AV8100_COMMAND_VIDEO_OUTPUT_FORMAT failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	if (dev->port->hdmi_sdtv_switch == SDTV_SWITCH)
@@ -1047,7 +1033,7 @@ static int hdmi_set_video_mode(
 		av8100_config.video_output_format.video_output_cea_vesa) {
 		dev_err(&dev->dev, "%s:video output format not found "
 			"\n", __func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	ret = av8100_conf_prep(AV8100_COMMAND_VIDEO_OUTPUT_FORMAT,
@@ -1056,7 +1042,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_prep "
 			"AV8100_COMMAND_VIDEO_OUTPUT_FORMAT failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	/* Get current av8100 video input format */
@@ -1066,7 +1052,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_get "
 			"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	/* Set correct av8100 video input pixel format */
@@ -1121,7 +1107,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_prep "
 				"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
 				__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	ret = av8100_conf_w(AV8100_COMMAND_VIDEO_INPUT_FORMAT,
@@ -1130,7 +1116,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_w "
 				"AV8100_COMMAND_VIDEO_INPUT_FORMAT failed\n",
 				__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	if (dev->port->hdmi_sdtv_switch == SDTV_SWITCH) {
@@ -1155,7 +1141,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_configuration_prepare "
 			"AV8100_COMMAND_COLORSPACECONVERSION failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	ret = av8100_conf_w(
@@ -1165,7 +1151,7 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_w "
 			"AV8100_COMMAND_COLORSPACECONVERSION failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	/* Set video output format */
@@ -1173,7 +1159,7 @@ static int hdmi_set_video_mode(
 		NULL, NULL, I2C_INTERFACE);
 	if (ret) {
 		dev_err(&dev->dev, "av8100_conf_w failed\n");
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	/* Set audio input format */
@@ -1183,16 +1169,13 @@ static int hdmi_set_video_mode(
 		dev_err(&dev->dev, "%s:av8100_conf_w "
 				"AV8100_COMMAND_AUDIO_INPUT_FORMAT failed\n",
 			__func__);
-		goto hdmi_set_video_mode_end;
+		return ret;
 	}
 
 	dev->update_flags |= UPDATE_FLAG_VIDEO_MODE;
 	dev->first_update = true;
 
-hdmi_set_video_mode_end:
-	av8100_conf_unlock();
-
-	return ret;
+	return 0;
 }
 
 static u16 rotate_byte_left(u8 c, int nr)
@@ -1281,13 +1264,10 @@ static int hdmi_on_first_update(struct mcde_display_device *dev)
 	 * Only one of them should be enabled.
 	 * Note HDMI/DVI and DENC are always turned off in set_video_mode.
 	 */
-	av8100_conf_lock();
 	switch (dev->port->hdmi_sdtv_switch) {
 	case SDTV_SWITCH:
-		if (av8100_conf_get(AV8100_COMMAND_DENC, &av8100_config)) {
-			ret = -EFAULT;
-			goto hdmi_on_first_update_end;
-		}
+		if (av8100_conf_get(AV8100_COMMAND_DENC, &av8100_config))
+			return -EFAULT;
 		av8100_config.denc_format.enable = 1;
 		if (dev->video_mode.yres == NATIVE_YRES_SDTV) {
 			av8100_config.denc_format.standard_selection =
@@ -1320,7 +1300,7 @@ static int hdmi_on_first_update(struct mcde_display_device *dev)
 	if (ret) {
 		dev_err(&dev->dev, "%s:av8100_conf_prep "
 			"AV8100_COMMAND_HDMI/DENC failed\n", __func__);
-		goto hdmi_on_first_update_end;
+		return ret;
 	}
 
 	if (dev->port->hdmi_sdtv_switch == SDTV_SWITCH)
@@ -1332,15 +1312,11 @@ static int hdmi_on_first_update(struct mcde_display_device *dev)
 	if (ret) {
 		dev_err(&dev->dev, "%s:av8100_conf_w "
 			"AV8100_COMMAND_HDMI/DENC failed\n", __func__);
-		goto hdmi_on_first_update_end;
+		return ret;
 	}
-hdmi_on_first_update_end:
-	av8100_conf_unlock();
+
 	return ret;
 }
-
-#define HDMI_GET_RETRY_TIME	500000
-#define HDMI_GET_RETRY_CNT_MAX	4
 
 static int hdmi_set_power_mode(struct mcde_display_device *ddev,
 	enum mcde_display_power_mode power_mode)
@@ -1351,9 +1327,6 @@ static int hdmi_set_power_mode(struct mcde_display_device *ddev,
 	/* OFF -> STANDBY */
 	if (ddev->power_mode == MCDE_DISPLAY_PM_OFF &&
 					power_mode != MCDE_DISPLAY_PM_OFF) {
-		int cnt;
-		int get_res;
-
 		/*
 		 * the regulator for analog TV out is only enabled here,
 		 * this means that one needs to switch to the OFF state
@@ -1368,21 +1341,9 @@ static int hdmi_set_power_mode(struct mcde_display_device *ddev,
 		ddev->power_mode = MCDE_DISPLAY_PM_STANDBY;
 
 		/* Get HDMI resource */
-		for (cnt = 0; cnt < HDMI_GET_RETRY_CNT_MAX; cnt++) {
-			get_res = av8100_hdmi_get(AV8100_HDMI_USER_VIDEO);
-			if (get_res >= 0)
-				break;
-			else
-				usleep_range(HDMI_GET_RETRY_TIME,
-						HDMI_GET_RETRY_TIME * 12 / 10);
-		}
+		av8100_hdmi_get();
 
-		if (get_res < 0)
-			return -EFAULT;
-		else if (get_res > 1)
-			av8100_hdmi_video_on();
-		else
-			hdmi_set_port_pixel_format(ddev);
+		hdmi_set_port_pixel_format(ddev);
 	}
 	/* STANDBY -> ON */
 	if (ddev->power_mode == MCDE_DISPLAY_PM_STANDBY &&
@@ -1403,8 +1364,8 @@ static int hdmi_set_power_mode(struct mcde_display_device *ddev,
 		memset(&(ddev->video_mode), 0, sizeof(struct mcde_video_mode));
 
 		/* Put HDMI resource */
-		if (av8100_hdmi_put(AV8100_HDMI_USER_VIDEO)) {
-			/* Audio is still used */
+		if (av8100_hdmi_put()) {
+			/* Audio is still used; disable video */
 			av8100_hdmi_video_off();
 		}
 
