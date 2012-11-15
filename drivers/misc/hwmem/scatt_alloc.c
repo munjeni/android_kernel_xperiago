@@ -87,9 +87,6 @@ void scatt_free(void *instance, void *alloc)
 
 	struct alloc *alloc_l = (struct alloc *)alloc;
 
-	if (alloc == NULL)
-		return;
-
 	mutex_lock(&lock);
 
 	/* Free all pages in the sglist */

@@ -48,7 +48,6 @@ struct clonedev {
 	struct compdev *src_compdev;
 	struct compdev *dst_compdev;
 	bool overlay_case;
-	struct compdev_size src_size;
 	struct compdev_size dst_size;
 	struct compdev_rect crop_rect;
 	struct compdev_scene_info s_info;
@@ -141,7 +140,8 @@ static int clonedev_blt(struct clonedev *cd,
 	return req_id;
 }
 
-static void clonedev_best_fit(struct compdev_rect *crop_rect,
+static void clonedev_best_fit(struct compdev_rect *src_rect,
+		struct compdev_rect *crop_rect,
 		struct compdev_rect *dst_rect,
 		enum   compdev_transform  transform)
 {
@@ -201,45 +201,6 @@ static void clonedev_best_fit(struct compdev_rect *crop_rect,
 		dst_rect->y += (crop_rect->height - dst_h) >> 1;
 }
 
-static void clonedev_rescale_destrect(struct compdev_rect *boundary,
-		struct compdev_size *src_size,
-		struct compdev_rect *dst_rect,
-		enum compdev_transform transform)
-{
-	uint32_t q, r, src_width;
-	uint32_t x, y, height, width;
-
-	if (transform == COMPDEV_TRANSFORM_ROT_0) {
-		x = dst_rect->x;
-		y = dst_rect->y;
-		width = dst_rect->width;
-		height = dst_rect->height;
-		src_width = src_size->width;
-	} else if (transform == COMPDEV_TRANSFORM_ROT_90_CW) {
-		x = src_size->height - dst_rect->y - dst_rect->height;
-		y = dst_rect->x;
-		width = dst_rect->height;
-		height = dst_rect->width;
-		src_width = src_size->height;
-	} else if (transform == COMPDEV_TRANSFORM_ROT_90_CCW) {
-		x = dst_rect->y;
-		y = src_size->width - dst_rect->x - dst_rect->width;
-		width = dst_rect->height;
-		height = dst_rect->width;
-		src_width = src_size->height;
-	}
-
-	q = (boundary->width << 6) / src_width;
-	r = (boundary->width << 6) % src_width;
-
-	dst_rect->x      = (((boundary->x << 6) + ((q * x + r * x / src_width) +
-				(0x1 << 5))) >> 6) & ~0x1;
-	dst_rect->y      = ((q * y + r * y / src_width) >> 6) + boundary->y;
-	dst_rect->width  = (((q * width + r * width / src_width) +
-				(0x1 << 5)) >> 6) & ~0x1;
-	dst_rect->height = (q * height + r * height / src_width) >> 6;
-}
-
 static int clonedev_set_mode_locked(struct clonedev *cd,
 		enum clonedev_mode mode)
 {
@@ -286,18 +247,9 @@ static int clonedev_set_crop_ratio_locked(struct clonedev *cd, u8 crop_ratio)
 static void set_transform_and_dest_rect(struct clonedev *cd,
 		struct compdev_img *img)
 {
-	struct compdev_rect temp_rect = {0};
-	temp_rect.width = cd->src_size.width;
-	temp_rect.height = cd->src_size.height;
-
-	/* First adjust src rect to crop_rect */
-	clonedev_best_fit(&cd->crop_rect,
-			&temp_rect,
-			img->transform);
-
-	/* Now use temp_rect as the boundary */
-	clonedev_rescale_destrect(&temp_rect,
-			&cd->src_size,
+	/* Adjust destination rect */
+	clonedev_best_fit(&img->src_rect,
+			&cd->crop_rect,
 			&img->dst_rect,
 			img->transform);
 
@@ -505,12 +457,8 @@ static void clonedev_compose_locked(struct clonedev *cd)
 				b2r2_req_id = ret;
 		}
 
-		dst_img->img.dst_rect = cd->crop_rect;
-		dst_img->img.src_rect.x = 0;
-		dst_img->img.src_rect.y = 0;
-		dst_img->img.src_rect.width = cd->crop_rect.width;
-		dst_img->img.src_rect.height = cd->crop_rect.height;
-
+		dst_img->img.dst_rect.x += cd->crop_rect.x;
+		dst_img->img.dst_rect.y += cd->crop_rect.y;
 		compdev_post_single_buffer_asynch(cd->dst_compdev,
 				&dst_img->img, cd->blt_handle, b2r2_req_id);
 
@@ -767,10 +715,6 @@ int clonedev_create(void)
 		goto fail_register_misc;
 
 	ret = compdev_get(1, &cd->dst_compdev);
-	if (ret < 0)
-		goto fail_register_misc;
-
-	ret = compdev_get_size(cd->src_compdev, &cd->src_size);
 	if (ret < 0)
 		goto fail_register_misc;
 
