@@ -208,7 +208,7 @@ struct as3676_als_group {
 };
 
 #define AS3676_ATTR(_name)  \
-	__ATTR(_name, 0644, as3676_##_name##_show, as3676_##_name##_store)
+	__ATTR(_name, 0664, as3676_##_name##_show, as3676_##_name##_store)
 
 #define AS3676_DEV_ATTR(_name)  \
 	struct device_attribute as3676_##_name = AS3676_ATTR(_name);

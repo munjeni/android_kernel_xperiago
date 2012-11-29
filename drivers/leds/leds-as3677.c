@@ -2433,7 +2433,7 @@ static ssize_t as3677_foo_store(struct device *dev,
 }
 #endif
 #define AS3677_ATTR(_name)  \
-	__ATTR(_name, 0644, as3677_##_name##_show, as3677_##_name##_store)
+	__ATTR(_name, 0664, as3677_##_name##_show, as3677_##_name##_store)
 static struct device_attribute as3677_attributes[] = {
 	AS3677_ATTR(debug),
 	AS3677_ATTR(dim_start),
