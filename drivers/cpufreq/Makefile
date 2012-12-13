@@ -13,6 +13,9 @@ obj-$(CONFIG_CPU_FREQ_GOV_INTERACTIVE)	+= cpufreq_interactive.o
 obj-$(CONFIG_CPU_FREQ_GOV_SMARTASS2)	+= cpufreq_smartass2.o
 obj-$(CONFIG_CPU_FREQ_GOV_MINMAX)		+= cpufreq_minmax.o
 obj-$(CONFIG_CPU_FREQ_GOV_HOTPLUG)		+= cpufreq_hotplug.o
+obj-$(CONFIG_CPU_FREQ_GOV_LULZACTIVEQ)	+= axperiau_lulzactiveq.o
+obj-$(CONFIG_CPU_FREQ_GOV_ONDEMANDAX)	+= axperiau_ondemandax.o
+obj-$(CONFIG_CPU_FREQ_GOV_PEGASUSQ)	+= axperiau_pegasusq.o
 
 
 # CPUfreq cross-arch helpers

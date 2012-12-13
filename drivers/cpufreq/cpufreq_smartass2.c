@@ -35,32 +35,34 @@
 #include <asm/cputime.h>
 #include <linux/earlysuspend.h>
 
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/fs.h>
+
+#define KERNEL_MODULE
+#include "axperiau_common.h"
+
+#ifndef DBG
+#define DBG(x)
+#endif
+
+#define AX_MODULE_NAME "axperiau_smartass2"
+#define AX_MODULE_VER "v008 ("__DATE__" "__TIME__")"
+
+typedef long (*nr_running_type) (void);
+static nr_running_type nr_running_ax;
+
+typedef void (*default_idle_type) (void);
+static default_idle_type default_idle_ax;
 
 /******************** Tunable parameters: ********************/
-
-/*
- * The "ideal" frequency to use when awake. The governor will ramp up faster
- * towards the ideal frequency and slower after it has passed it. Similarly,
- * lowering the frequency towards the ideal frequency is faster than below it.
- */
-#define DEFAULT_AWAKE_IDEAL_FREQ 972000
-static unsigned int awake_ideal_freq;
-
-/*
- * The "ideal" frequency to use when suspended.
- * When set to 0, the governor will not track the suspended state (meaning
- * that practically when sleep_ideal_freq==0 the awake_ideal_freq is used
- * also when suspended).
- */
-#define DEFAULT_SLEEP_IDEAL_FREQ 540000
-static unsigned int sleep_ideal_freq;
 
 /*
  * Freqeuncy delta when ramping up above the ideal freqeuncy.
  * Zero disables and causes to always jump straight to max frequency.
  * When below the ideal freqeuncy we always ramp up to the ideal freq.
  */
-#define DEFAULT_RAMP_UP_STEP 108000
+#define DEFAULT_RAMP_UP_STEP 400000
 static unsigned int ramp_up_step;
 
 /*
@@ -68,40 +70,40 @@ static unsigned int ramp_up_step;
  * Zero disables and will calculate ramp down according to load heuristic.
  * When above the ideal freqeuncy we always ramp down to the ideal freq.
  */
-#define DEFAULT_RAMP_DOWN_STEP 216000
+#define DEFAULT_RAMP_DOWN_STEP 200000
 static unsigned int ramp_down_step;
 
 /*
  * CPU freq will be increased if measured load > max_cpu_load;
  */
-#define DEFAULT_MAX_CPU_LOAD 70
+#define DEFAULT_MAX_CPU_LOAD 75
 static unsigned long max_cpu_load;
 
 /*
  * CPU freq will be decreased if measured load < min_cpu_load;
  */
-#define DEFAULT_MIN_CPU_LOAD 30
+#define DEFAULT_MIN_CPU_LOAD 25
 static unsigned long min_cpu_load;
 
 /*
  * The minimum amount of time to spend at a frequency before we can ramp up.
  * Notice we ignore this when we are below the ideal frequency.
  */
-#define DEFAULT_UP_RATE_US 48000;
+#define DEFAULT_UP_RATE_US 29000;
 static unsigned long up_rate_us;
 
 /*
  * The minimum amount of time to spend at a frequency before we can ramp down.
  * Notice we ignore this when we are above the ideal frequency.
  */
-#define DEFAULT_DOWN_RATE_US 99000;
+#define DEFAULT_DOWN_RATE_US 48000;
 static unsigned long down_rate_us;
 
 /*
  * The frequency to set when waking up from sleep.
  * When sleep_ideal_freq=0 this will have no effect.
  */
-#define DEFAULT_SLEEP_WAKEUP_FREQ 99999999
+#define DEFAULT_SLEEP_WAKEUP_FREQ 200000
 static unsigned int sleep_wakeup_freq;
 
 /*
@@ -111,10 +113,25 @@ static unsigned int sleep_wakeup_freq;
 static unsigned int sample_rate_jiffies;
 
 
+/*
+ * Sampling rate when screen is off. Current value forces governor to behave like conservative governor.
+ */
+#define DEFAULT_SLEEP_RATE_JIFFIES (usecs_to_jiffies(500 * 1000))
+static unsigned int sleep_rate_jiffies;
+
+/*
+ * When sleep_max_freq>0 the frequency when suspended will be capped
+ * by this frequency.
+ * Set sleep_max_freq=0 to disable this behavior.
+ */
+#define DEFAULT_SLEEP_MAX_FREQ 200000
+static unsigned int sleep_max_freq;
+
 /*************** End of tunables ***************/
 
 
 static void (*pm_idle_old)(void);
+
 static atomic_t active_count = ATOMIC_INIT(0);
 
 struct smartass_info_s {
@@ -129,7 +146,8 @@ struct smartass_info_s {
 	int old_freq;
 	int ramp_dir;
 	unsigned int enable;
-	int ideal_speed;
+	int stored_max_speed;
+	int timer_rate;
 };
 static DEFINE_PER_CPU(struct smartass_info_s, smartass_info);
 
@@ -172,27 +190,18 @@ struct cpufreq_governor cpufreq_gov_smartass2 = {
 };
 
 inline static void smartass_update_min_max(struct smartass_info_s *this_smartass, struct cpufreq_policy *policy, int suspend) {
-	if (suspend) {
-		this_smartass->ideal_speed = // sleep_ideal_freq; but make sure it obeys the policy min/max
-			policy->max > sleep_ideal_freq ?
-			(sleep_ideal_freq > policy->min ? sleep_ideal_freq : policy->min) : policy->max;
-	} else {
-		this_smartass->ideal_speed = // awake_ideal_freq; but make sure it obeys the policy min/max
-			policy->min < awake_ideal_freq ?
-			(awake_ideal_freq < policy->max ? awake_ideal_freq : policy->max) : policy->min;
-	}
+	//if (suspend) {
+	//	this_smartass->max_speed = sleep_max_freq >= policy->min ? sleep_max_freq : policy->max;
+	//	this_smartass->timer_rate = sleep_rate_jiffies;
+	//} else {
+	//	this_smartass->max_speed = policy->max;
+	//	this_smartass->timer_rate = sample_rate_jiffies;
+	//}
 }
 
-inline static void smartass_update_min_max_allcpus(void) {
-	unsigned int i;
-	for_each_online_cpu(i) {
-		struct smartass_info_s *this_smartass = &per_cpu(smartass_info, i);
-		if (this_smartass->enable)
-			smartass_update_min_max(this_smartass,this_smartass->cur_policy,suspended);
-	}
-}
-
-inline static unsigned int validate_freq(struct cpufreq_policy *policy, int freq) {
+inline static unsigned int validate_freq(struct smartass_info_s *this_smartass, struct cpufreq_policy *policy, int freq) {
+	if (suspended && sleep_max_freq >= (int)policy->min && freq > sleep_max_freq)
+		return sleep_max_freq;
 	if (freq > (int)policy->max)
 		return policy->max;
 	if (freq < (int)policy->min)
@@ -202,7 +211,7 @@ inline static unsigned int validate_freq(struct cpufreq_policy *policy, int freq
 
 inline static void reset_timer(unsigned long cpu, struct smartass_info_s *this_smartass) {
 	this_smartass->time_in_idle = get_cpu_idle_time_us(cpu, &this_smartass->idle_exit_time);
-	mod_timer(&this_smartass->timer, jiffies + sample_rate_jiffies);
+	mod_timer(&this_smartass->timer, jiffies + this_smartass->timer_rate);
 }
 
 inline static void work_cpumask_set(unsigned long cpu) {
@@ -228,7 +237,7 @@ inline static int target_freq(struct cpufreq_policy *policy, struct smartass_inf
 
 	if (new_freq == old_freq)
 		return 0;
-	new_freq = validate_freq(policy,new_freq);
+	new_freq = validate_freq(this_smartass,policy,new_freq);
 	if (new_freq == old_freq)
 		return 0;
 
@@ -315,8 +324,9 @@ static void cpufreq_smartass_timer(unsigned long cpu)
 	if (cpu_load > max_cpu_load || delta_idle == 0)
 	{
 		if (old_freq < policy->max &&
-			 (old_freq < this_smartass->ideal_speed || delta_idle == 0 ||
-			  cputime64_sub(update_time, this_smartass->freq_change_time) >= up_rate_us))
+			 (
+//				delta_idle == 0 ||
+				cputime64_sub(update_time, this_smartass->freq_change_time) >= up_rate_us))
 		{
 			dprintk(SMARTASS_DEBUG_ALG,"smartassT @ %d ramp up: load %d (delta_idle %llu)\n",
 				old_freq,cpu_load,delta_idle);
@@ -329,8 +339,8 @@ static void cpufreq_smartass_timer(unsigned long cpu)
 	}
 	// Similarly for scale down: load should be below min and if we are at or below ideal
 	// frequency we require that we have been at this frequency for at least down_rate_us:
-	else if (cpu_load < min_cpu_load && old_freq > policy->min &&
-		 (old_freq > this_smartass->ideal_speed ||
+	else if ( cpu_load < min_cpu_load && old_freq > policy->min &&
+		 (suspended ||
 		  cputime64_sub(update_time, this_smartass->freq_change_time) >= down_rate_us))
 	{
 		dprintk(SMARTASS_DEBUG_ALG,"smartassT @ %d ramp down: load %d (delta_idle %llu)\n",
@@ -347,8 +357,16 @@ static void cpufreq_smartass_timer(unsigned long cpu)
 	// the idle loop will activate the timer.
 	// Additionally, if we queued some work, the work task will reset the timer
 	// after it has done its adjustments.
-	if (!queued_work && old_freq < policy->max)
+	if (!queued_work && (old_freq < policy->max || !suspended))
 		reset_timer(cpu,this_smartass);
+}
+
+static void execute_pm_idle_old(void)
+{
+	if(pm_idle_old)
+		pm_idle_old();
+	else
+		default_idle_ax();
 }
 
 static void cpufreq_idle(void)
@@ -357,14 +375,14 @@ static void cpufreq_idle(void)
 	struct cpufreq_policy *policy = this_smartass->cur_policy;
 
 	if (!this_smartass->enable) {
-		pm_idle_old();
+		execute_pm_idle_old();
 		return;
 	}
 
 	if (policy->cur == policy->min && timer_pending(&this_smartass->timer))
 		del_timer(&this_smartass->timer);
 
-	pm_idle_old();
+	execute_pm_idle_old();
 
 	if (!timer_pending(&this_smartass->timer))
 		reset_timer(smp_processor_id(), this_smartass);
@@ -397,11 +415,9 @@ static void cpufreq_smartass_freq_change_time_work(struct work_struct *work)
 			       old_freq,policy->cur);
 			new_freq = old_freq;
 		}
-		else if (ramp_dir > 0 && nr_running() > 1) {
+		else if (ramp_dir > 0 && nr_running_ax() > 1) {
 			// ramp up logic:
-			if (old_freq < this_smartass->ideal_speed)
-				new_freq = this_smartass->ideal_speed;
-			else if (ramp_up_step) {
+			if (ramp_up_step) {
 				new_freq = old_freq + ramp_up_step;
 				relation = CPUFREQ_RELATION_H;
 			}
@@ -409,16 +425,12 @@ static void cpufreq_smartass_freq_change_time_work(struct work_struct *work)
 				new_freq = policy->max;
 				relation = CPUFREQ_RELATION_H;
 			}
-			dprintk(SMARTASS_DEBUG_ALG,"smartassQ @ %d ramp up: ramp_dir=%d ideal=%d\n",
-				old_freq,ramp_dir,this_smartass->ideal_speed);
+			dprintk(SMARTASS_DEBUG_ALG,"smartassQ @ %d ramp up: ramp_dir=%d cur=%d\n",
+				old_freq,ramp_dir,policy->cur);
 		}
 		else if (ramp_dir < 0) {
 			// ramp down logic:
-			if (old_freq > this_smartass->ideal_speed) {
-				new_freq = this_smartass->ideal_speed;
-				relation = CPUFREQ_RELATION_H;
-			}
-			else if (ramp_down_step)
+			if (ramp_down_step)
 				new_freq = old_freq - ramp_down_step;
 			else {
 				// Load heuristics: Adjust new_freq such that, assuming a linear
@@ -429,24 +441,29 @@ static void cpufreq_smartass_freq_change_time_work(struct work_struct *work)
 					new_freq = old_freq -1;
 			}
 			dprintk(SMARTASS_DEBUG_ALG,"smartassQ @ %d ramp down: ramp_dir=%d ideal=%d\n",
-				old_freq,ramp_dir,this_smartass->ideal_speed);
+				old_freq,ramp_dir,policy->cur);
 		}
 		else { // ramp_dir==0 ?! Could the timer change its mind about a queued ramp up/down
 		       // before the work task gets to run?
 		       // This may also happen if we refused to ramp up because the nr_running()==1
 			new_freq = old_freq;
 			dprintk(SMARTASS_DEBUG_ALG,"smartassQ @ %d nothing: ramp_dir=%d nr_running=%lu\n",
-				old_freq,ramp_dir,nr_running());
+				old_freq,ramp_dir,nr_running_ax());
 		}
 
 		// do actual ramp up (returns 0, if frequency change failed):
 		new_freq = target_freq(policy,this_smartass,new_freq,old_freq,relation);
-		if (new_freq)
-			this_smartass->freq_change_time_in_idle =
-				get_cpu_idle_time_us(cpu,&this_smartass->freq_change_time);
+		if (new_freq){
+			int cpu__;
+			for_each_possible_cpu(cpu__) {
+				struct smartass_info_s * this_smartass__ = &per_cpu(smartass_info, cpu__);
+				this_smartass__->freq_change_time_in_idle =
+					get_cpu_idle_time_us(cpu__,&this_smartass__->freq_change_time);
+			}
+		}
 
 		// reset timer:
-		if (new_freq < policy->max)
+		if (new_freq < policy->max || !suspended)
 			reset_timer(cpu,this_smartass);
 		// if we are maxed out, it is pointless to use the timer
 		// (idle cycles wake up the timer when the timer comes)
@@ -500,23 +517,6 @@ static ssize_t store_down_rate_us(struct kobject *kobj, struct attribute *attr, 
 	return res;
 }
 
-static ssize_t show_sleep_ideal_freq(struct kobject *kobj, struct attribute *attr, char *buf)
-{
-	return sprintf(buf, "%u\n", sleep_ideal_freq);
-}
-
-static ssize_t store_sleep_ideal_freq(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count)
-{
-	ssize_t res;
-	unsigned long input;
-	res = strict_strtoul(buf, 0, &input);
-	if (res >= 0 && input >= 0) {
-		sleep_ideal_freq = input;
-		if (suspended)
-			smartass_update_min_max_allcpus();
-	}
-	return res;
-}
 
 static ssize_t show_sleep_wakeup_freq(struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -533,23 +533,21 @@ static ssize_t store_sleep_wakeup_freq(struct kobject *kobj, struct attribute *a
 	return res;
 }
 
-static ssize_t show_awake_ideal_freq(struct kobject *kobj, struct attribute *attr, char *buf)
+static ssize_t show_sleep_max_freq(struct kobject *kobj, struct attribute *attr, char *buf)
 {
-	return sprintf(buf, "%u\n", awake_ideal_freq);
+	return sprintf(buf, "%u\n", sleep_max_freq);
 }
 
-static ssize_t store_awake_ideal_freq(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count)
+static ssize_t store_sleep_max_freq(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count)
 {
 	ssize_t res;
 	unsigned long input;
 	res = strict_strtoul(buf, 0, &input);
-	if (res >= 0 && input >= 0) {
-		awake_ideal_freq = input;
-		if (!suspended)
-			smartass_update_min_max_allcpus();
-	}
+	if (res >= 0 && input >= 0)
+		sleep_max_freq = input;
 	return res;
 }
+
 
 static ssize_t show_sample_rate_jiffies(struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -563,6 +561,21 @@ static ssize_t store_sample_rate_jiffies(struct kobject *kobj, struct attribute 
 	res = strict_strtoul(buf, 0, &input);
 	if (res >= 0 && input > 0 && input <= 1000)
 		sample_rate_jiffies = input;
+	return res;
+}
+
+static ssize_t show_sleep_rate_jiffies(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", sleep_rate_jiffies);
+}
+
+static ssize_t store_sleep_rate_jiffies(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count)
+{
+	ssize_t res;
+	unsigned long input;
+	res = strict_strtoul(buf, 0, &input);
+	if (res >= 0 && input > 0 && input <= 1000)
+		sleep_rate_jiffies = input;
 	return res;
 }
 
@@ -633,27 +646,27 @@ static struct global_attr _name##_attr =	\
 define_global_rw_attr(debug_mask);
 define_global_rw_attr(up_rate_us);
 define_global_rw_attr(down_rate_us);
-define_global_rw_attr(sleep_ideal_freq);
 define_global_rw_attr(sleep_wakeup_freq);
-define_global_rw_attr(awake_ideal_freq);
 define_global_rw_attr(sample_rate_jiffies);
 define_global_rw_attr(ramp_up_step);
 define_global_rw_attr(ramp_down_step);
 define_global_rw_attr(max_cpu_load);
 define_global_rw_attr(min_cpu_load);
+define_global_rw_attr(sleep_max_freq);
+define_global_rw_attr(sleep_rate_jiffies);
 
 static struct attribute * smartass_attributes[] = {
 	&debug_mask_attr.attr,
 	&up_rate_us_attr.attr,
 	&down_rate_us_attr.attr,
-	&sleep_ideal_freq_attr.attr,
 	&sleep_wakeup_freq_attr.attr,
-	&awake_ideal_freq_attr.attr,
 	&sample_rate_jiffies_attr.attr,
 	&ramp_up_step_attr.attr,
 	&ramp_down_step_attr.attr,
 	&max_cpu_load_attr.attr,
 	&min_cpu_load_attr.attr,
+        &sleep_max_freq_attr.attr,
+	&sleep_rate_jiffies_attr.attr,
 	NULL,
 };
 
@@ -742,7 +755,7 @@ static int cpufreq_governor_smartass(struct cpufreq_policy *new_policy,
 
 static void smartass_suspend(int cpu, int suspend)
 {
-	struct smartass_info_s *this_smartass = &per_cpu(smartass_info, smp_processor_id());
+	struct smartass_info_s *this_smartass = &per_cpu(smartass_info, cpu);
 	struct cpufreq_policy *policy = this_smartass->cur_policy;
 	unsigned int new_freq;
 
@@ -750,8 +763,14 @@ static void smartass_suspend(int cpu, int suspend)
 		return;
 
 	smartass_update_min_max(this_smartass,policy,suspend);
+
 	if (!suspend) { // resume at max speed:
-		new_freq = validate_freq(policy,sleep_wakeup_freq);
+
+		cpufreq_update_freq(cpu, policy->min, this_smartass->stored_max_speed);
+
+		new_freq = validate_freq(this_smartass,policy,sleep_wakeup_freq);
+
+		this_smartass->timer_rate = sample_rate_jiffies;
 
 		dprintk(SMARTASS_DEBUG_JUMPS,"SmartassS: awaking at %d\n",new_freq);
 
@@ -762,18 +781,25 @@ static void smartass_suspend(int cpu, int suspend)
 		// to allow some time to settle down. Instead we just reset our statistics (and reset the timer).
 		// Eventually, the timer will adjust the frequency if necessary.
 
+		this_smartass->stored_max_speed = policy->max;
+
+		this_smartass->timer_rate = sleep_rate_jiffies;
+
 		this_smartass->freq_change_time_in_idle =
-			get_cpu_idle_time_us(cpu,&this_smartass->freq_change_time);
+			get_cpu_idle_time_us(cpu, &this_smartass->freq_change_time);
+
+		if(policy->min <= sleep_max_freq)
+			cpufreq_update_freq(cpu, policy->min, sleep_max_freq);
 
 		dprintk(SMARTASS_DEBUG_JUMPS,"SmartassS: suspending at %d\n",policy->cur);
 	}
 
-	reset_timer(smp_processor_id(),this_smartass);
+	reset_timer(cpu,this_smartass);
 }
 
 static void smartass_early_suspend(struct early_suspend *handler) {
 	int i;
-	if (suspended || sleep_ideal_freq==0) // disable behavior for sleep_ideal_freq==0
+	if (suspended) // disable behavior for sleep_ideal_freq==0
 		return;
 	suspended = 1;
 	for_each_online_cpu(i)
@@ -804,18 +830,30 @@ static int __init cpufreq_smartass_init(void)
 	debug_mask = 0;
 	up_rate_us = DEFAULT_UP_RATE_US;
 	down_rate_us = DEFAULT_DOWN_RATE_US;
-	sleep_ideal_freq = DEFAULT_SLEEP_IDEAL_FREQ;
 	sleep_wakeup_freq = DEFAULT_SLEEP_WAKEUP_FREQ;
-	awake_ideal_freq = DEFAULT_AWAKE_IDEAL_FREQ;
 	sample_rate_jiffies = DEFAULT_SAMPLE_RATE_JIFFIES;
 	ramp_up_step = DEFAULT_RAMP_UP_STEP;
 	ramp_down_step = DEFAULT_RAMP_DOWN_STEP;
 	max_cpu_load = DEFAULT_MAX_CPU_LOAD;
 	min_cpu_load = DEFAULT_MIN_CPU_LOAD;
+	sleep_rate_jiffies = DEFAULT_SLEEP_RATE_JIFFIES;
+	sleep_max_freq = DEFAULT_SLEEP_MAX_FREQ;
+
+        if(kallsyms_lookup_name_ax == 0){
+                return -1;
+        }
 
 	spin_lock_init(&cpumask_lock);
 
 	suspended = 0;
+
+
+
+	nr_running_ax = (void*) kallsyms_lookup_name_ax("nr_running");
+	default_idle_ax = (void*) kallsyms_lookup_name_ax("default_idle");
+
+	if(!nr_running_ax || !default_idle_ax )
+		return -1;
 
 	/* Initalize per-cpu data: */
 	for_each_possible_cpu(i) {
@@ -828,6 +866,7 @@ static int __init cpufreq_smartass_init(void)
 		this_smartass->freq_change_time = 0;
 		this_smartass->freq_change_time_in_idle = 0;
 		this_smartass->cur_cpu_load = 0;
+		this_smartass->stored_max_speed = 1000000;
 		// intialize timer:
 		init_timer_deferrable(&this_smartass->timer);
 		this_smartass->timer.function = cpufreq_smartass_timer;
@@ -836,7 +875,7 @@ static int __init cpufreq_smartass_init(void)
 	}
 
 	// Scale up is high priority
-	up_wq = alloc_workqueue("ksmartass_up", WQ_HIGHPRI, 1);
+	up_wq = alloc_workqueue("ksmartass_up", WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
 	down_wq = alloc_workqueue("ksmartass_down", 0, 1);
 	if (!up_wq || !down_wq)
 		return -ENOMEM;
@@ -844,6 +883,8 @@ static int __init cpufreq_smartass_init(void)
 	INIT_WORK(&freq_scale_work, cpufreq_smartass_freq_change_time_work);
 
 	register_early_suspend(&smartass_power_suspend);
+
+	printk(KERN_INFO AX_MODULE_NAME ": module " AX_MODULE_VER " for device " DEVICE_NAME " loaded\n");
 
 	return cpufreq_register_governor(&cpufreq_gov_smartass2);
 }
@@ -854,17 +895,13 @@ fs_initcall(cpufreq_smartass_init);
 module_init(cpufreq_smartass_init);
 #endif
 
-static void __exit cpufreq_smartass_exit(void)
-{
-	cpufreq_unregister_governor(&cpufreq_gov_smartass2);
-	destroy_workqueue(up_wq);
-	destroy_workqueue(down_wq);
-}
-
-module_exit(cpufreq_smartass_exit);
-
 MODULE_AUTHOR ("Erasmux");
 MODULE_DESCRIPTION ("'cpufreq_smartass2' - A smart cpufreq governor");
+
+MODULE_AUTHOR ("AnDyX - some improvement");
+MODULE_DESCRIPTION ("A smartassV2 cpufreq governor. Now optimized for the " DEVICE_NAME);
+
 MODULE_LICENSE ("GPL");
+
 
 

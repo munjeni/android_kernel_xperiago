@@ -725,10 +725,10 @@ static int __init cpuidle_driver_init(void)
 	int cpu;
 
 	/* Configure wake up reasons */
-	if (cpu_is_u9500())
+	/*if (cpu_is_u9500())
 		prcmu_enable_wakeups(PRCMU_WAKEUP(ARM) | PRCMU_WAKEUP(RTC) |
 				     PRCMU_WAKEUP(ABB) | PRCMU_WAKEUP(HSI0));
-	else
+	else*/
 		prcmu_enable_wakeups(PRCMU_WAKEUP(ARM) | PRCMU_WAKEUP(RTC) |
 				     PRCMU_WAKEUP(ABB));
 
