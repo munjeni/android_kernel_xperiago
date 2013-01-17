@@ -911,6 +911,8 @@ mmci_data_irq(struct mmci_host *host, struct mmc_data *data,
 		if (!data->stop) {
 			mmci_request_end(host, data->mrq);
 		} else {
+			/* Stop safety timer also before blk-rw stop */
+			del_timer(&host->req_expiry);
 			mmci_start_command(host, data->stop, 0);
 		}
 	}
@@ -1919,3 +1921,4 @@ module_param(fmax, uint, 0444);
 
 MODULE_DESCRIPTION("ARM PrimeCell PL180/181 Multimedia Card Interface driver");
 MODULE_LICENSE("GPL");
+

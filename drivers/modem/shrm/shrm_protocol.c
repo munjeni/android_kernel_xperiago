@@ -479,7 +479,7 @@ void shm_ac_read_notif_0_tasklet(unsigned long tasklet_data)
 		dev_err(shrm->dev, "Invalid boot state\n");
 	}
 	/* start timer here */
-	hrtimer_start(&timer, ktime_set(0, 25*NSEC_PER_MSEC),
+	hrtimer_start(&timer, ktime_set(0, 50*NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);
 	atomic_dec(&ac_sleep_disable_count);
 
@@ -517,7 +517,7 @@ void shm_ac_read_notif_1_tasklet(unsigned long tasklet_data)
 		shrm_audio_tx_state = SHRM_IDLE;
 	}
 	/* start timer here */
-	hrtimer_start(&timer, ktime_set(0, 25*NSEC_PER_MSEC),
+	hrtimer_start(&timer, ktime_set(0, 50*NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);
 	atomic_dec(&ac_sleep_disable_count);
 	atomic_dec(&ac_msg_pend_1);
@@ -1550,3 +1550,4 @@ u8 get_boot_state()
 {
 	return boot_state;
 }
+

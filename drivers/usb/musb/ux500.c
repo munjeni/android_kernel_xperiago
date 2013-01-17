@@ -449,18 +449,10 @@ static void ux500_musb_set_vbus(struct musb *musb, int is_on)
 	u8		devctl;
 	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
 	int ret = 1;
-#ifdef	CONFIG_USB_OTG_20
-	int val = 0;
-#endif
 	/* HDRC controls CPEN, but beware current surges during device
 	 * connect.  They can trigger transient overcurrent conditions
 	 * that must be ignored.
 	 */
-#ifdef	CONFIG_USB_OTG_20
-	val = musb_readb(musb->mregs, MUSB_MISC);
-	val |= 0x1C;
-	musb_writeb(musb->mregs, MUSB_MISC, val);
-#endif
 	devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
 
 	if (is_on) {
@@ -866,3 +858,4 @@ static void __exit ux500_exit(void)
 	platform_driver_unregister(&ux500_driver);
 }
 module_exit(ux500_exit);
+

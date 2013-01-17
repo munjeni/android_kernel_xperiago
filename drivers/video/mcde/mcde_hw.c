@@ -3533,6 +3533,9 @@ static int _mcde_chnl_update(struct mcde_chnl_state *chnl,
 static int _mcde_chnl_enable(struct mcde_chnl_state *chnl)
 {
 	dev_vdbg(&mcde_dev->dev, "%s\n", __func__);
+	if (!chnl)
+		return -EINVAL;
+
 	chnl->enabled = true;
 	chnl->first_frame_vsync_fix = true;
 	return 0;
@@ -3676,7 +3679,7 @@ int mcde_chnl_set_power_mode(struct mcde_chnl_state *chnl,
 {
 	dev_vdbg(&mcde_dev->dev, "%s\n", __func__);
 
-	if (!chnl->reserved)
+	if (!chnl || !chnl->reserved)
 		return -EINVAL;
 
 	chnl->power_mode = power_mode;
@@ -4598,3 +4601,4 @@ void mcde_exit(void)
 	/* REVIEW: shutdown MCDE? */
 	platform_driver_unregister(&mcde_driver);
 }
+

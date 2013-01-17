@@ -409,6 +409,7 @@ static int infofrsend(struct hdmi_device *hdev, u8 type, u8 version, u8 crc,
 {
 	union av8100_configuration config;
 	struct av8100_status status;
+	int ret = 0;
 
 	status = av8100_status_get();
 	if (status.av8100_state < AV8100_OPMODE_STANDBY)
@@ -429,19 +430,24 @@ static int infofrsend(struct hdmi_device *hdev, u8 type, u8 version, u8 crc,
 	config.infoframes_format.crc = crc;
 	config.infoframes_format.length = data_len;
 	memcpy(&config.infoframes_format.data, data, data_len);
+	av8100_conf_lock();
 	if (av8100_conf_prep(AV8100_COMMAND_INFOFRAMES,
 		&config) != 0) {
 		dev_err(hdev->dev, "av8100_conf_prep FAIL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto infofrsend_end;
 	}
 
 	if (av8100_conf_w(AV8100_COMMAND_INFOFRAMES,
 		NULL, NULL, I2C_INTERFACE) != 0) {
 		dev_err(hdev->dev, "av8100_conf_w FAIL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto infofrsend_end;
 	}
 
-	return 0;
+infofrsend_end:
+	av8100_conf_unlock();
+	return ret;
 }
 
 static int hdcpchkaesotp(struct hdmi_device *hdev, u8 *crc, u8 *progged)
@@ -696,6 +702,7 @@ static int audiocfg(struct hdmi_device *hdev, struct audio_cfg *cfg)
 {
 	union av8100_configuration config;
 	struct av8100_status status;
+	int ret = 0;
 
 	status = av8100_status_get();
 	if (status.av8100_state < AV8100_OPMODE_STANDBY) {
@@ -720,19 +727,24 @@ static int audiocfg(struct hdmi_device *hdev, struct audio_cfg *cfg)
 	config.audio_input_format.audio_if_mode		= cfg->if_mode;
 	config.audio_input_format.audio_mute		= cfg->mute;
 
+	av8100_conf_lock();
 	if (av8100_conf_prep(AV8100_COMMAND_AUDIO_INPUT_FORMAT,
 		&config) != 0) {
 		dev_err(hdev->dev, "av8100_conf_prep FAIL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto audiocfg_end;
 	}
 
 	if (av8100_conf_w(AV8100_COMMAND_AUDIO_INPUT_FORMAT,
 		NULL, NULL, I2C_INTERFACE) != 0) {
 		dev_err(hdev->dev, "av8100_conf_w FAIL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto audiocfg_end;
 	}
 
-	return 0;
+audiocfg_end:
+	av8100_conf_unlock();
+	return ret;
 }
 
 /* sysfs */
@@ -2162,15 +2174,19 @@ hdcp_authencr_end:
 		else
 			config.hdmi_format.hdmi_mode = AV8100_HDMI_ON;
 
+		av8100_conf_lock();
 		if (av8100_conf_prep(AV8100_COMMAND_HDMI, &config) != 0) {
 			dev_err(hdev->dev, "av8100_conf_prep FAIL\n");
+			av8100_conf_unlock();
 			return -EINVAL;
 		}
 		if (av8100_conf_w(AV8100_COMMAND_HDMI, NULL, NULL,
 			I2C_INTERFACE) != 0) {
 			dev_err(hdev->dev, "av8100_conf_w FAIL\n");
+			av8100_conf_unlock();
 			return -EINVAL;
 		}
+		av8100_conf_unlock();
 		}
 		break;
 
@@ -2453,3 +2469,4 @@ void hdmi_exit(void)
 	/* Free device data */
 	kfree(hdev);
 }
+
