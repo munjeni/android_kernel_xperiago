@@ -1921,6 +1921,62 @@ static ssize_t as3677_als_lx_store(struct device *dev,
 	return -EINVAL;
 }
 
+/*
+ * This is for Cyanogenmod lightsensor on Sony Xperia Go
+ * Read raw light sensor values
+ * Convert raw light sensor values to default android lightsensor lux values (0.0, 33.0, 77.0, 220.0, 308.0, 397.0, 485.0, 698.0, 860.0, 1023.0)
+ */
+static ssize_t as3677_cm_lux_res_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct as3677_data *data = dev_get_drvdata(dev);
+	static int als_raw_res;
+	s32 amb_result = i2c_smbus_read_byte_data(data->client,
+			AS3677_REG_ALS_result);
+
+	if (!(AS3677_READ_REG(AS3677_REG_ALS_control) & 1)) {
+		als_raw_res = 0;
+		snprintf(buf, PAGE_SIZE,
+				"%d\n", als_raw_res);
+		return strnlen(buf, PAGE_SIZE);
+	} else {
+		als_raw_res = (int)amb_result;
+		if (als_raw_res) {
+			if (als_raw_res > 0 && als_raw_res < 25) {
+				als_raw_res = 33;
+			} else if (als_raw_res > 25 && als_raw_res < 50) {
+				als_raw_res = 77;
+			} else if (als_raw_res > 50 && als_raw_res < 75) {
+				als_raw_res = 220;
+			} else if (als_raw_res > 75 && als_raw_res < 100) {
+				als_raw_res = 308;
+			} else if (als_raw_res > 100 && als_raw_res < 125) {
+				als_raw_res = 397;
+			} else if (als_raw_res > 125 && als_raw_res < 150) {
+				als_raw_res = 485;
+			} else if (als_raw_res > 150 && als_raw_res < 180) {
+				als_raw_res = 698;
+			} else if (als_raw_res > 180 && als_raw_res < 210) {
+				als_raw_res = 860;
+			} else if (als_raw_res > 210 && als_raw_res < 255) {
+				als_raw_res = 1023;
+			}
+		} else
+			als_raw_res = 0;
+
+		snprintf(buf, PAGE_SIZE,
+				"%d\n", als_raw_res);
+		return strnlen(buf, PAGE_SIZE);
+	}
+}
+
+static ssize_t as3677_cm_lux_res_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t size)
+{
+	return -EINVAL;
+}
+
 static int as3677_set_state(struct as3677_data *data,
 		struct as3677_als_fsm_state *s)
 {
@@ -2433,7 +2489,7 @@ static ssize_t as3677_foo_store(struct device *dev,
 }
 #endif
 #define AS3677_ATTR(_name)  \
-	__ATTR(_name, 0664, as3677_##_name##_show, as3677_##_name##_store)
+	__ATTR(_name, 0666, as3677_##_name##_show, as3677_##_name##_store)
 static struct device_attribute as3677_attributes[] = {
 	AS3677_ATTR(debug),
 	AS3677_ATTR(dim_start),
@@ -2450,6 +2506,7 @@ static struct device_attribute as3677_attributes[] = {
 	AS3677_ATTR(als_group2),
 	AS3677_ATTR(als_group3),
 	AS3677_ATTR(als_lx),
+	AS3677_ATTR(cm_lux_res),
 	AS3677_ATTR(als_on),
 	AS3677_ATTR(als_sample_fsm),
 	AS3677_ATTR(als_use_fsm),
