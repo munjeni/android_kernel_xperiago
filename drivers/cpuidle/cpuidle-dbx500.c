@@ -584,13 +584,20 @@ static int enter_sleep(struct cpuidle_device *dev,
 	}
 
 	ux500_ci_dbg_log(target, time_enter);
-
+#ifdef CONFIG_CRASH_DUMP
 	ux500_ci_dbg_log_post_mortem(target,
 				     time_enter,
 				     est_wake_time,
 				     state->sched_wake_up,
 				     rtcrtt_program_time,
 				     master);
+#else
+	ux500_ci_dbg_log_post_mortem(time_enter,
+				     est_wake_time,
+				     state->sched_wake_up,
+				     rtcrtt_program_time,
+				     master);
+#endif
 
 	if (master && cstates[target].ARM != ARM_ON)
 		prcmu_set_power_state(cstates[target].pwrst,

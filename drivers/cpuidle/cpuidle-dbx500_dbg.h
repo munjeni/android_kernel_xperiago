@@ -26,9 +26,14 @@ void ux500_ci_dbg_remove(void);
 void ux500_ci_dbg_log(int ctarget,
 		      ktime_t enter_time);
 
+#ifdef CONFIG_CRASH_DUMP
 void ux500_ci_dbg_log_post_mortem(int target,
 				  ktime_t enter_time, ktime_t est_wake_common,
 				  ktime_t est_wake, int sleep, bool is_last);
+#else
+void ux500_ci_dbg_log_post_mortem(ktime_t enter_time, ktime_t est_wake_common,
+				  ktime_t est_wake, int sleep, bool is_last);
+#endif
 
 void ux500_ci_dbg_wake_latency(int ctarget, int sleep_time);
 void ux500_ci_dbg_exit_latency(int ctarget, ktime_t now, ktime_t exit,
