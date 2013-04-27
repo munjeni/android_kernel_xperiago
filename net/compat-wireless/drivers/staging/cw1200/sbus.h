@@ -36,7 +36,7 @@ struct sbus_ops {
 	int (*reset)(struct sbus_priv *self);
 	size_t (*align_size)(struct sbus_priv *self, size_t size);
 	int (*power_mgmt)(struct sbus_priv *self, bool suspend);
-        int (*set_block_size)(struct sbus_priv *self, size_t size);
+	int (*set_block_size)(struct sbus_priv *self, size_t size);
 };
 
 #endif /* CW1200_SBUS_H */

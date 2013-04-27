@@ -6,6 +6,7 @@
 	David Libault  <david.libault@inventel.fr>
 
    Copyright (C) 2002 Maxim Krasnyansky <maxk@qualcomm.com>
+   Copyright (C) 2012 Sony Mobile Communications AB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License version 2 as
@@ -656,7 +657,8 @@ int bnep_add_connection(struct bnep_connadd_req *req, struct socket *sock)
 		err = PTR_ERR(s->task);
 		goto failed;
 	}
-
+	if (req->role != BNEP_SVC_PANU)
+		bnep_send_rsp(s, BNEP_SETUP_CONN_RSP, BNEP_SUCCESS);
 	up_write(&bnep_session_sem);
 	strcpy(req->device, dev->name);
 	return 0;
@@ -744,6 +746,27 @@ int bnep_get_conninfo(struct bnep_conninfo *ci)
 	up_read(&bnep_session_sem);
 	return err;
 }
+
+int bnep_extension_req(u8 *dst, struct sk_buff *skb)
+{
+	struct bnep_session *s;
+	int err = 0;
+
+	down_read(&bnep_session_sem);
+
+	s = __bnep_get_session(dst);
+	if (!s) {
+		err = -ENOENT;
+		goto finished;
+	}
+
+	err = bnep_rx_extension(s, skb);
+
+finished:
+	up_read(&bnep_session_sem);
+	return err;
+}
+
 
 static int __init bnep_init(void)
 {

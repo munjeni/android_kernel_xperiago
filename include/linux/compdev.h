@@ -150,6 +150,7 @@ struct compdev_video_mode {
 #define COMPDEV_POST_SCENE_INFO_IOC    _IOW('D', 3, struct compdev_scene_info)
 #define COMPDEV_GET_LISTENER_STATE_IOC _IOR('D', 4, enum compdev_listener_state)
 #define COMPDEV_SET_VIDEO_MODE_IOC     _IOW('D', 5, struct compdev_video_mode)
+#define COMPDEV_WAIT_FOR_VSYNC_IOC     _IOR('D', 6, __s64)
 
 
 #if defined(__KERNEL__) || defined(_KERNEL)
@@ -184,6 +185,7 @@ int compdev_set_video_mode(struct compdev *dev,
 		struct compdev_video_mode *video_mode);
 int compdev_get_listener_state(struct compdev *dev,
 		enum compdev_listener_state *listener_state);
+int compdev_wait_for_vsync(struct compdev *cd, s64 *timestamp);
 const char *compdev_get_device_name(struct compdev *dev);
 int compdev_clear_screen(struct compdev *dev);
 

@@ -53,7 +53,6 @@
 #include <linux/scatterlist.h>
 #include <linux/delay.h>
 #include <linux/io.h>
-#include <linux/pm_runtime.h>
 
 #include <asm/sizes.h>
 
@@ -1138,7 +1137,6 @@ static void pl011_clock_off(struct work_struct *work)
 	struct circ_buf *xmit = &port->state->xmit;
 	unsigned long flags;
 	bool disable_regulator = false;
-	bool runtime_put = false;
 	unsigned int busy, interrupt_status;
 
 	spin_lock_irqsave(&port->lock, flags);
@@ -1152,7 +1150,6 @@ static void pl011_clock_off(struct work_struct *work)
 				pl011_backup(uap, true);
 				disable_regulator = true;
 			}
-			runtime_put = true;
 			uap->clk_state = PL011_CLK_OFF;
 			clk_disable(uap->clk);
 		} else
@@ -1164,8 +1161,6 @@ static void pl011_clock_off(struct work_struct *work)
 
 	if (disable_regulator)
 		regulator_disable(uap->regulator);
-	if (runtime_put)
-		pm_runtime_put_sync(uap->port.dev);
 }
 
 /* Request to turn off uart clock once pending TX is flushed */
@@ -1197,7 +1192,6 @@ static void pl011_clock_on(struct uart_port *port)
 	switch (uap->clk_state) {
 	case PL011_CLK_OFF:
 		spin_unlock_irqrestore(&port->lock, flags);
-		pm_runtime_get_sync(uap->port.dev);
 		clk_enable(uap->clk);
 		spin_lock_irqsave(&port->lock, flags);
 		if (!uart_console(&uap->port) && uap->regulator) {
@@ -1233,16 +1227,13 @@ static int pl011_power_startup(struct uart_amba_port *uap)
 	int retval = 0;
 
 	if (uap->clk_state == PL011_PORT_OFF) {
-		pm_runtime_get_sync(uap->port.dev);
 		if (!uart_console(&uap->port) && uap->regulator)
 			regulator_enable(uap->regulator);
 		retval = clk_enable(uap->clk);
-		if (!retval) {
+		if (!retval)
 			uap->clk_state = PL011_CLK_ON;
-		} else {
+		else
 			uap->clk_state = PL011_PORT_OFF;
-			pm_runtime_put_sync(uap->port.dev);
-		}
 	}
 
 	return retval;
@@ -1251,7 +1242,6 @@ static int pl011_power_startup(struct uart_amba_port *uap)
 static void pl011_power_shutdown(struct uart_amba_port *uap)
 {
 	bool disable_regulator = false;
-	bool runtime_put = false;
 
 	cancel_delayed_work_sync(&uap->clk_off_work);
 
@@ -1259,7 +1249,6 @@ static void pl011_power_shutdown(struct uart_amba_port *uap)
 	if (uap->clk_state == PL011_CLK_ON ||
 		uap->clk_state ==  PL011_CLK_REQUEST_OFF) {
 		clk_disable(uap->clk);
-		runtime_put = true;
 		if (!uart_console(&uap->port) && uap->regulator)
 			disable_regulator = true;
 	}
@@ -1268,8 +1257,6 @@ static void pl011_power_shutdown(struct uart_amba_port *uap)
 
 	if (disable_regulator)
 		regulator_disable(uap->regulator);
-	if (runtime_put)
-		pm_runtime_put_sync(uap->port.dev);
 }
 
 static void
@@ -1299,14 +1286,12 @@ static inline void pl011_clock_check(struct uart_amba_port *uap)
 
 static inline int pl011_power_startup(struct uart_amba_port *uap)
 {
-	pm_runtime_get_sync(uap->port.dev);
 	return clk_enable(uap->clk);
 }
 
 static inline void pl011_power_shutdown(struct uart_amba_port *uap)
 {
 	clk_disable(uap->clk);
-	pm_runtime_put_sync(uap->port.dev);
 }
 
 static inline void
@@ -2232,15 +2217,9 @@ static int pl011_probe(struct amba_device *dev, const struct amba_id *id)
 
 	amba_set_drvdata(dev, uap);
 
-	pm_runtime_irq_safe(&dev->dev);
-
 	pl011_clock_control_init(uap);
 
 	ret = uart_add_one_port(&amba_reg, &uap->port);
-
-	if (!ret)
-		pm_runtime_put(&dev->dev);
-
 	if (ret) {
 		amba_set_drvdata(dev, NULL);
 		amba_ports[i] = NULL;
@@ -2254,7 +2233,6 @@ static int pl011_probe(struct amba_device *dev, const struct amba_id *id)
 		kfree(uap);
 	}
  out:
-
 	return ret;
 }
 
@@ -2264,8 +2242,6 @@ static int pl011_remove(struct amba_device *dev)
 	int i;
 
 	amba_set_drvdata(dev, NULL);
-
-	pm_runtime_get_sync(uap->port.dev);
 
 	uart_remove_one_port(&amba_reg, &uap->port);
 

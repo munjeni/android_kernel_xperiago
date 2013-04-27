@@ -92,8 +92,6 @@ int cw1200_enable_listening(struct cw1200_common *priv);
 int cw1200_disable_listening(struct cw1200_common *priv);
 int cw1200_set_uapsd_param(struct cw1200_common *priv,
 				const struct wsm_edca_params *arg);
-void cw1200_ba_work(struct work_struct *work);
-void cw1200_ba_timer(unsigned long arg);
 const u8 *cw1200_get_ie(u8 *start, size_t len, u8 ie);
 
 #endif

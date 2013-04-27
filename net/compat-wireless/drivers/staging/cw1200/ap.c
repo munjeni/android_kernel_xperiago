@@ -497,6 +497,7 @@ void cw1200_bss_info_changed(struct ieee80211_hw *dev,
 			priv->delayed_link_loss = 0;
 			spin_lock(&priv->bss_loss_lock);
 			priv->bss_loss_status = CW1200_BSS_LOSS_NONE;
+			priv->bss_loss_checking = 0;
 			spin_unlock(&priv->bss_loss_lock);
 			cancel_delayed_work_sync(&priv->bss_loss_work);
 			cancel_delayed_work_sync(&priv->connection_loss_work);
@@ -531,6 +532,17 @@ void cw1200_bss_info_changed(struct ieee80211_hw *dev,
 				    MAX_BEACON_SKIP_TIME_MS ? 1 :
 				    priv->join_dtim_period, 0));
 
+			if (sta && cw1200_is_ht(&priv->ht_info)) {
+				if(priv->join_status == CW1200_JOIN_STATUS_STA &&
+								!priv->block_ack_enabled) {
+					ap_printk(KERN_DEBUG
+						"[STA] Enabling Block ACK\n");
+					WARN_ON(wsm_set_block_ack_policy(priv,
+					priv->ba_tid_mask,
+					priv->ba_tid_mask));
+					priv->block_ack_enabled = true;
+				}
+			}
 			cw1200_set_pm(priv, &priv->powersave_mode);
 			if (priv->vif->p2p) {
 				ap_printk(KERN_DEBUG

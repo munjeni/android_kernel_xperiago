@@ -1,6 +1,7 @@
 /* drivers/video/mcde/display-r61529_dsi_seiko_rj248.c
  *
  * Copyright (C) 2011 Sony Ericsson Mobile Communications AB.
+ * Copyright (C) 2013 Sony Mobile Communications AB.
  *
  * Sony Ericsson Renesas 61529 driver for Seiko panel
  *
@@ -225,7 +226,7 @@ static int custom_interface_init(struct mcde_display_device *ddev)
 	/* Just transfer lower margin to upper layer, */
 	/* Assume left_margin, right_margin, upper_margin is 0*/
 	/* fps=62.6Hz */
-	vmode->vfp = 186;
+	vmode->vfp = 214;
 
 	return ret;
 }

@@ -31,6 +31,9 @@
 #include <mach/prcmu.h>
 #else
 #include <linux/mfd/dbx500-prcmu.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
+#include <linux/prcmu-qos.h>
+#endif
 #endif
 
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 64
@@ -235,5 +238,5 @@ void mali_gpu_utilization_handler(u32 utilization)
 
 void set_mali_parent_power_domain(void *dev)
 {
-	MALI_DEBUG_PRINT(1, ("This function should not be called since we are not using run time pm\n"));
+	MALI_DEBUG_PRINT(2, ("This function should not be called since we are not using run time pm\n"));
 }

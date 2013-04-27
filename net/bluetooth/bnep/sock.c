@@ -131,6 +131,32 @@ static int bnep_sock_ioctl(struct socket *sock, unsigned int cmd, unsigned long 
 
 		return err;
 
+	case BNEPEXTENSION: {
+			struct bnep_extension_req ext;
+			struct sk_buff *skb;
+			void __user *datap;
+
+			if (copy_from_user(&ext, argp, sizeof(ext)))
+				return -EFAULT;
+
+			skb = alloc_skb(ext.data_len, GFP_KERNEL);
+			if (!skb)
+				return -ENOMEM;
+
+			datap = (void __user *)((__u8*)argp + sizeof(ext));
+			if (copy_from_user(skb_put(skb, ext.data_len), datap,
+					ext.data_len)) {
+				err = -EFAULT;
+				goto ext_fin;
+			}
+
+			err = bnep_extension_req(ext.dst, skb);
+
+ext_fin:
+			kfree_skb(skb);
+		}
+		return err;
+
 	default:
 		return -EINVAL;
 	}

@@ -57,9 +57,8 @@ int mcde_dss_set_rotation(struct mcde_display_device *ddev,
 enum mcde_display_rotation mcde_dss_get_rotation(
 	struct mcde_display_device *ddev);
 
-int mcde_dss_set_synchronized_update(struct mcde_display_device *ddev,
-	bool enable);
-bool mcde_dss_get_synchronized_update(struct mcde_display_device *ddev);
+int mcde_dss_wait_for_vsync(struct mcde_display_device *ddev, s64 *timestamp);
+
 bool mcde_dss_secure_output(struct mcde_display_device *ddev);
 
 /* MCDE dss events */

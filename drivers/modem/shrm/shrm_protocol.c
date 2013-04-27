@@ -252,7 +252,8 @@ static void nl_send_unicast_message(int dst_pid)
 	int bt_state;
 	unsigned long flags;
 
-	dev_info(shm_dev->dev, "Sending unicast message\n");
+	if (boot_state != BOOT_DONE)
+		dev_info(shm_dev->dev, "Sending unicast message\n");
 
 	/* prepare the NL message for unicast */
 	skb = alloc_skb(NLMSG_SPACE(MAX_PAYLOAD), GFP_KERNEL);
@@ -519,8 +520,10 @@ void shm_ac_read_notif_1_tasklet(unsigned long tasklet_data)
 	/* start timer here */
 	hrtimer_start(&timer, ktime_set(0, 50*NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);
-	atomic_dec(&ac_sleep_disable_count);
-	atomic_dec(&ac_msg_pend_1);
+	if (atomic_read(&ac_msg_pend_1)) {
+		atomic_dec(&ac_sleep_disable_count);
+		atomic_dec(&ac_msg_pend_1);
+	}
 
 	dev_dbg(shrm->dev, "%s OUT\n", __func__);
 }
@@ -854,13 +857,14 @@ void shm_nl_receive(struct sk_buff *skb)
 	msg = *((int *)(NLMSG_DATA(nlh)));
 	switch (msg) {
 	case SHRM_NL_MOD_QUERY_STATE:
-		dev_info(shm_dev->dev, "mod-query-state from user-space\n");
+		if (boot_state != BOOT_DONE)
+			dev_info(shm_dev->dev, "mod-query-state from user-space\n");
 		nl_send_unicast_message(nlh->nlmsg_pid);
 		break;
 
 	case SHRM_NL_USER_MOD_RESET:
 		dev_info(shm_dev->dev, "user-space inited mod-reset-req\n");
-		dev_info(shm_dev->dev, "PCRMU resets modem\n");
+		dev_info(shm_dev->dev, "PRCMU resets modem\n");
 		if (atomic_read(&mod_stuck) || atomic_read(&fifo_full)) {
 			dev_info(shm_dev->dev,
 					"Modem reset already in progress\n");
@@ -1550,4 +1554,3 @@ u8 get_boot_state()
 {
 	return boot_state;
 }
-

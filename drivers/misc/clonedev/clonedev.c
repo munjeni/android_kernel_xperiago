@@ -155,8 +155,7 @@ static void clonedev_best_fit(struct compdev_rect *crop_rect,
 	uint32_t dst_w;
 	uint32_t dst_h;
 
-	if (transform == COMPDEV_TRANSFORM_ROT_90_CCW ||
-			transform == COMPDEV_TRANSFORM_ROT_270_CCW) {
+	if (transform & COMPDEV_TRANSFORM_ROT_90_CW) {
 		nw = dst_rect->width << 6;
 		dw = dst_rect->height;
 		nh = dst_rect->height << 6;
@@ -224,6 +223,12 @@ static void clonedev_rescale_destrect(struct compdev_rect *boundary,
 	} else if (transform == COMPDEV_TRANSFORM_ROT_90_CCW) {
 		x = dst_rect->y;
 		y = src_size->width - dst_rect->x - dst_rect->width;
+		width = dst_rect->height;
+		height = dst_rect->width;
+		src_width = src_size->height;
+	} else if (transform == COMPDEV_TRANSFORM_ROT_90_CW_FLIP_V) {
+		x = dst_rect->y;
+		y = dst_rect->x;
 		width = dst_rect->height;
 		height = dst_rect->width;
 		src_width = src_size->height;
@@ -301,7 +306,7 @@ static void set_transform_and_dest_rect(struct clonedev *cd,
 			&img->dst_rect,
 			img->transform);
 
-	if (cd->overlay_case)
+	if (cd->overlay_case && (img->flags & COMPDEV_OVERLAY_FLAG))
 		img->transform = cd->s_info.ovly_transform;
 	else
 		img->transform = cd->s_info.fb_transform;
@@ -910,5 +915,4 @@ module_exit(clonedev_exit);
 MODULE_AUTHOR("Per-Daniel Olsson <per-daniel.olsson@stericsson.com>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Device for display cloning on external output");
-
 

@@ -69,25 +69,17 @@ menu "Driver debug features"
 config CW1200_DEBUGFS
       bool "Expose driver internals to DebugFS (DEVELOPMENT)"
 
-config CW1200_BINARY_LOGGING
-      bool "Store log in binary form to minimize performance impact (DEVELOPMENT)"
-      depends on CW1200_DEBUGFS
-      default y if CW1200_DEBUGFS=y
-
 config CW1200_BH_DEBUG
       bool "Enable low-level device communication logs (DEVELOPMENT)"
 
 config CW1200_WSM_DEBUG
       bool "Enable WSM API debug messages (DEVELOPMENT)"
-      default y if CW1200_BINARY_LOGGING=y
 
 config CW1200_WSM_DUMPS
       bool "Verbose WSM API logging (DEVELOPMENT)"
-      default y if CW1200_BINARY_LOGGING=y
 
 config CW1200_WSM_DUMPS_SHORT
       bool "Dump only first x bytes (default 20) (DEVELOPMENT)"
-      default y if CW1200_BINARY_LOGGING=y
 
 config CW1200_TXRX_DEBUG
       bool "Enable TX/RX debug messages (DEVELOPMENT)"

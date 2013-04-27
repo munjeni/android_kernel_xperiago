@@ -153,13 +153,16 @@ static int get_chroma_pitch(u32 luma_pitch, enum compdev_fmt fmt)
 	switch (fmt) {
 	case COMPDEV_FMT_YV12:
 		chroma_pitch = ALIGN((luma_pitch >> 1), 16);
+		break;
 	case COMPDEV_FMT_YUV420_SP:
 	case COMPDEV_FMT_YVU420_SP:
 		chroma_pitch = luma_pitch;
+		break;
 	case COMPDEV_FMT_YCBCR42XMBN:
 	case COMPDEV_FMT_YUV420_P:
 	case COMPDEV_FMT_YVU420_P:
 		chroma_pitch = luma_pitch >> 1;
+		break;
 	default:
 		chroma_pitch = 0;
 	}

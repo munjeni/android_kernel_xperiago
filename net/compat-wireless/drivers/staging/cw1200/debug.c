@@ -3,8 +3,6 @@
  * DebugFS code
  *
  * Copyright (c) 2010, ST-Ericsson
- * Copyright (C) 2012, Sony Mobile Communications AB.
- *
  * Author: Dmitry Tarnyagin <dmitry.tarnyagin@stericsson.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,10 +14,6 @@
 #include <linux/seq_file.h>
 #include "cw1200.h"
 #include "debug.h"
-
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-static size_t cw1200_binlog_pull_data(struct cw1200_common *priv, u8 *buf, size_t len);
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
 
 /* join_status */
 static const char * const cw1200_debug_join_status[] = {
@@ -112,20 +106,6 @@ static int cw1200_status_show(struct seq_file *seq, void *v)
 	struct list_head *item;
 	struct cw1200_common *priv = seq->private;
 	struct cw1200_debug_priv *d = priv->debug;
-	int ba_cnt, ba_acc, ba_cnt_rx, ba_acc_rx, ba_avg = 0, ba_avg_rx = 0;
-	bool ba_ena;
-
-	spin_lock_bh(&priv->ba_lock);
-	ba_cnt = priv->debug->ba_cnt;
-	ba_acc = priv->debug->ba_acc;
-	ba_cnt_rx = priv->debug->ba_cnt_rx;
-	ba_acc_rx = priv->debug->ba_acc_rx;
-	ba_ena = priv->ba_ena;
-	if (ba_cnt)
-		ba_avg = ba_acc / ba_cnt;
-	if (ba_cnt_rx)
-		ba_avg_rx = ba_acc_rx / ba_cnt_rx;
-	spin_unlock_bh(&priv->ba_lock);
 
 	seq_puts(seq,   "CW1200 Wireless LAN driver status\n");
 	seq_printf(seq, "Hardware:   %d.%d\n",
@@ -238,11 +218,6 @@ static int cw1200_status_show(struct seq_file *seq, void *v)
 		++i;
 	spin_unlock_bh(&priv->tx_policy_cache.lock);
 	seq_printf(seq, "RC in use:  %d\n", i);
-	seq_printf(seq, "BA stat:    %d, %d (%d)\n",
-		ba_cnt, ba_acc, ba_avg);
-	seq_printf(seq, "BA RX stat:    %d, %d (%d)\n",
-		ba_cnt_rx, ba_acc_rx, ba_avg_rx);
-	seq_printf(seq, "Block ACK:  %s\n", ba_ena ? "on" : "off");
 
 	seq_puts(seq, "\n");
 	for (i = 0; i < 4; ++i) {
@@ -550,31 +525,6 @@ static const struct file_operations fops_short_dump = {
 };
 #endif /* CONFIG_CW1200_WSM_DUMPS_SHORT */
 
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-static ssize_t cw1200_binlog_read(struct file *file,
-	char __user *user_buf, size_t count, loff_t *ppos)
-{
-	struct cw1200_common *priv = file->private_data;
-	char *buf;
-	size_t size;
-
-	buf = kzalloc(min(PAGE_SIZE, count), GFP_KERNEL);
-	if (buf == NULL)
-		return -ENOMEM;
-
-	size = cw1200_binlog_pull_data(priv, buf, min(PAGE_SIZE, count));
-
-	return simple_read_from_buffer(user_buf, count, ppos,
-					buf, size);
-}
-
-static const struct file_operations fops_binlog = {
-	.open = cw1200_generic_open,
-	.read = cw1200_binlog_read,
-	.llseek = no_llseek,
-};
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
-
 int cw1200_debug_init(struct cw1200_common *priv)
 {
 	int ret = -ENOMEM;
@@ -623,13 +573,6 @@ int cw1200_debug_init(struct cw1200_common *priv)
 	if (ret)
 		goto err;
 
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-	spin_lock_init(&d->binlog.lock);
-	if (!debugfs_create_file("binlog", S_IRUGO, d->debugfs_phy, priv,
-			&fops_binlog))
-		goto err;
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
-
 	return 0;
 
 err:
@@ -656,130 +599,3 @@ int cw1200_print_fw_version(struct cw1200_common *priv, u8 *buf, size_t len)
 			priv->wsm_caps.firmwareVersion,
 			priv->wsm_caps.firmwareBuildNumber);
 }
-
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-
-#define BINLOG_BUF_MASK (MAX_BINLOG_BUF_SIZE - 1)
-
-static void __cw1200_binlog_put_data(struct cw1200_binlog_ctx *ctx,
-				     cw1200_binlog_id_t id, u8 *data, size_t len)
-{
-	size_t avail;
-
-	BUILD_BUG_ON_NOT_POWER_OF_2(MAX_BINLOG_BUF_SIZE);
-
-	if (len + 2 > sizeof(ctx->data) - 1)
-		return;
-
-	/*
-	 * Free some space for new data by discarding old logs.
-	 * Need to follow message flow, so ctx->start always
-	 * points to the start of message (if any).
-	 */
-	avail = (ctx->start - ctx->end - 1) & BINLOG_BUF_MASK;
-	while (avail < len + 2) {
-		avail += ctx->data[(ctx->start + 1) & BINLOG_BUF_MASK] + 2;
-		ctx->start += ctx->data[(ctx->start + 1) & BINLOG_BUF_MASK] + 2;
-		ctx->start &= BINLOG_BUF_MASK;
-	}
-
-	/* put Type and Length */
-	ctx->data[ctx->end] = id;
-	ctx->data[(ctx->end + 1) & BINLOG_BUF_MASK] = len;
-	ctx->end = (ctx->end + 2) & BINLOG_BUF_MASK;
-
-	/* put Value */
-	if (ctx->end + len <= sizeof(ctx->data)) {
-		memcpy(ctx->data + ctx->end, data, len);
-		ctx->end += len;
-		ctx->end &= BINLOG_BUF_MASK;
-	} else {
-		memcpy(ctx->data + ctx->end, data, sizeof(ctx->data) - ctx->end);
-		data += sizeof(ctx->data) - ctx->end;
-		len -= sizeof(ctx->data) - ctx->end;
-
-		memcpy(ctx->data, data, len);
-		ctx->end = len;
-	}
-}
-
-void cw1200_binlog_put_data(struct cw1200_common *priv,
-			    cw1200_binlog_id_t id, const u8 *data, size_t len)
-{
-	struct cw1200_binlog_ctx *ctx = &priv->debug->binlog;
-
-	spin_lock_bh(&ctx->lock);
-	__cw1200_binlog_put_data(ctx, id, data, len);
-	spin_unlock_bh(&ctx->lock);
-}
-
-__attribute__ ((format (printf, 3, 4)))
-void cw1200_binlog_put_text(struct cw1200_common *priv, cw1200_binlog_id_t id,
-			    const char *fmt, ...)
-{
-	struct cw1200_binlog_ctx *ctx = &priv->debug->binlog;
-	va_list args;
-
-	/*
-	 * We can't vsnprintf() to static buffer,
-	 * this won't work with multiple HW instances.
-	 */
-
-	spin_lock_bh(&ctx->lock);
-
-	/* note: truncation possible */
-	va_start(args, fmt);
-	vsnprintf(ctx->text, sizeof(ctx->text), fmt, args);
-	va_end(args);
-
-	__cw1200_binlog_put_data(ctx, id, ctx->text, strlen(ctx->text));
-
-	spin_unlock_bh(&ctx->lock);
-}
-
-static size_t cw1200_binlog_pull_data(struct cw1200_common *priv, u8 *buf, size_t len)
-{
-	struct cw1200_binlog_ctx *ctx = &priv->debug->binlog;
-	size_t total, req;
-
-	spin_lock_bh(&ctx->lock);
-
-	total = (ctx->end - ctx->start) & BINLOG_BUF_MASK;
-
-	/*
-	 * If everything doesn't fit in a buffer --
-	 * find out how many complete messages does
-	 */
-	if (len < total) {
-		req = 0;
-		/*
-		 * Calculate amount (req) of readable complete messages which would fit into buffer.
-		 * One step of loop -- is one message.
-		 */
-		while ((req < total) &&
-		       (req + ctx->data[(ctx->start + req + 1) & BINLOG_BUF_MASK] + 2 <= len))
-			req += ctx->data[(ctx->start + req + 1) & BINLOG_BUF_MASK] + 2;
-	} else {
-		req = total;
-	}
-
-	len = req;
-
-	if (ctx->start + len <= sizeof(ctx->data)) {
-		memcpy(buf, ctx->data + ctx->start, len);
-		ctx->start += len;
-		ctx->start &= BINLOG_BUF_MASK;
-	} else {
-		memcpy(buf, ctx->data + ctx->start, sizeof(ctx->data) - ctx->start);
-		buf += sizeof(ctx->data) - ctx->start;
-		len -= sizeof(ctx->data) - ctx->start;
-
-		memcpy(buf, ctx->data, len);
-		ctx->start = len;
-	}
-
-	spin_unlock_bh(&ctx->lock);
-
-	return req;
-}
-#endif /* CONFIG_CW1200_BINARY_LOGGING */

@@ -474,6 +474,12 @@ struct platform_device u8500_hsi_device = {
  */
 
 
+/* Mali GPU platform device */
+struct platform_device db8500_mali_gpu_device = {
+	.name = "mali",
+	.id = 0,
+};
+
 
 struct resource keypad_resources[] = {
 	[0] = {

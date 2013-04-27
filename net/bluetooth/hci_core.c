@@ -2053,7 +2053,7 @@ EXPORT_SYMBOL(hci_send_sco);
 static inline struct hci_conn *hci_low_sent(struct hci_dev *hdev, __u8 type, int *quote)
 {
 	struct hci_conn_hash *h = &hdev->conn_hash;
-	struct hci_conn *conn = NULL;
+	struct hci_conn *conn = NULL, *conn_reserved;
 	int num = 0, min = ~0;
 	struct list_head *p;
 
@@ -2063,10 +2063,16 @@ static inline struct hci_conn *hci_low_sent(struct hci_dev *hdev, __u8 type, int
 		struct hci_conn *c;
 		c = list_entry(p, struct hci_conn, list);
 
-		if (c->type != type || skb_queue_empty(&c->data_q))
+		if (c->state != BT_CONNECTED && c->state != BT_CONFIG)
 			continue;
 
-		if (c->state != BT_CONNECTED && c->state != BT_CONFIG)
+		if (c->type != type)
+			continue;
+
+		if (c->pkt_reserved)
+			conn_reserved = c;
+
+		if (skb_queue_empty(&c->data_q))
 			continue;
 
 		num++;
@@ -2098,6 +2104,34 @@ static inline struct hci_conn *hci_low_sent(struct hci_dev *hdev, __u8 type, int
 
 		q = cnt / num;
 		*quote = q ? q : 1;
+
+		if (conn_reserved && !conn->pkt_reserved)  {
+			int pkt_nonreserved, resv_utilized;
+
+			resv_utilized = (conn_reserved->sent >=
+				conn_reserved->pkt_reserved)
+				? conn_reserved->pkt_reserved
+				: conn_reserved->sent;
+
+			pkt_nonreserved = cnt -
+				(conn_reserved->pkt_reserved - resv_utilized);
+
+			if (*quote > pkt_nonreserved)
+				*quote = pkt_nonreserved > 0
+					 ? pkt_nonreserved : 0;
+
+			if (!*quote) {
+				/* Send the packet of reserved conn,
+				 * since bandwidth is not available for sending
+				 * any packets on other conn.
+				 */
+				if (!skb_queue_empty(&conn_reserved->data_q)) {
+					conn = conn_reserved;
+					*quote = q ? q : 1;
+				} else
+					conn = NULL;
+			}
+		}
 	} else
 		*quote = 0;
 

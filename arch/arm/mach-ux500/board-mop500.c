@@ -932,6 +932,7 @@ static struct platform_device *mop500_platform_devs[] __initdata = {
 #ifdef CONFIG_HSI
 	&u8500_hsi_device,
 #endif
+	&db8500_mali_gpu_device,
 };
 
 /*

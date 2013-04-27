@@ -1,5 +1,6 @@
 /*
  * Copyright (C) ST-Ericsson SA 2011
+ * Copyright (C) 2012 Sony Mobile Communications AB. mm
  *
  * License Terms: GNU General Public License v2
  * Author: Martin Persson
@@ -131,7 +132,7 @@ static u8 opp50_voltage_val;
 #define CPUFREQ_OPP_DELAY_VOICECALL HZ
 static unsigned long cpufreq_opp_delay = CPUFREQ_OPP_DELAY;
 
-static bool prcmu_qos_init_done;
+static bool prcmu_qos_cpufreq_init_done;
 
 static bool lpa_override_enabled;
 static u8 opp50_voltage_val;
@@ -426,14 +427,16 @@ int prcmu_qos_add_requirement(int prcmu_qos_class, char *name, s32 value)
 		 &prcmu_qos_array[prcmu_qos_class]->requirements.list);
 	spin_unlock_irqrestore(&prcmu_qos_lock, flags);
 
-	if (!prcmu_qos_init_done && value != PRCMU_QOS_DEFAULT_VALUE) {
-		pr_err("prcmu-qos: ERROR: Not possible to request any other "
-		       "OPP/kHz than DEFAULT during boot!\n");
-		dump_stack();
-	}
-
-	if (prcmu_qos_init_done)
+	if (!prcmu_qos_cpufreq_init_done &&
+	    prcmu_qos_class == PRCMU_QOS_ARM_KHZ) {
+		if (value != PRCMU_QOS_DEFAULT_VALUE) {
+			pr_err("prcmu-qos: ERROR: Not possible to request any "
+				"other kHz than DEFAULT during boot!\n");
+			dump_stack();
+		}
+	} else {
 		update_target(prcmu_qos_class);
+	}
 
 	return 0;
 
@@ -479,15 +482,16 @@ int prcmu_qos_update_requirement(int prcmu_qos_class, char *name, s32 new_value)
 	}
 	spin_unlock_irqrestore(&prcmu_qos_lock, flags);
 	if (pending_update) {
-		if (!prcmu_qos_init_done &&
-		    new_value != PRCMU_QOS_DEFAULT_VALUE) {
-			pr_err("prcmu-qos: ERROR: Not possible to request any "
-			       "other OPP/kHz than DEFAULT during boot!\n");
-			dump_stack();
-		}
-
-		if (prcmu_qos_init_done)
+		if (!prcmu_qos_cpufreq_init_done &&
+		    prcmu_qos_class == PRCMU_QOS_ARM_KHZ) {
+			if (new_value != PRCMU_QOS_DEFAULT_VALUE) {
+				pr_err("prcmu-qos: ERROR: Not possible to request any "
+					"other kHz than DEFAULT during boot!\n");
+				dump_stack();
+			}
+		} else {
 			update_target(prcmu_qos_class);
+		}
 	}
 
 	return 0;
@@ -520,7 +524,11 @@ void prcmu_qos_remove_requirement(int prcmu_qos_class, char *name)
 		}
 	}
 	spin_unlock_irqrestore(&prcmu_qos_lock, flags);
-	if (pending_update && prcmu_qos_init_done)
+
+	if (pending_update &&
+	    ((prcmu_qos_cpufreq_init_done &&
+	    prcmu_qos_class == PRCMU_QOS_ARM_KHZ) ||
+	    prcmu_qos_class != PRCMU_QOS_ARM_KHZ))
 		update_target(prcmu_qos_class);
 }
 EXPORT_SYMBOL_GPL(prcmu_qos_remove_requirement);
@@ -768,6 +776,8 @@ static int __init prcmu_qos_power_init(void)
 	/* CPUs start at max */
 	atomic_set(&arm_khz_qos.target_value, arm_khz_qos.max_value);
 
+	prcmu_qos_cpufreq_init_done = true;
+
 	ret = register_prcmu_qos_misc(&ape_opp_qos, &prcmu_qos_ape_power_fops);
 	if (ret < 0) {
 		pr_err("prcmu ape qos: setup failed\n");
@@ -785,8 +795,6 @@ static int __init prcmu_qos_power_init(void)
 		pr_err("prcmu arm qos: setup failed\n");
 		return ret;
 	}
-
-	prcmu_qos_init_done = true;
 
 	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
 				  PRCMU_QOS_DEFAULT_VALUE);

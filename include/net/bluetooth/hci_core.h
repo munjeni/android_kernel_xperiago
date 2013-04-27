@@ -273,6 +273,7 @@ struct hci_conn {
 	__u8		remote_auth;
 
 	unsigned int	sent;
+	unsigned int	pkt_reserved;
 
 	struct sk_buff_head data_q;
 
@@ -451,6 +452,7 @@ void hci_sco_setup(struct hci_conn *conn, __u8 status);
 struct hci_conn *hci_conn_add(struct hci_dev *hdev, int type,
 					 bdaddr_t *dst);
 int hci_conn_del(struct hci_conn *conn);
+void hci_conn_reserve_credit(struct hci_dev *hdev, __u16 handle, __u8 num_pkt);
 void hci_conn_hash_flush(struct hci_dev *hdev);
 void hci_conn_check_pending(struct hci_dev *hdev);
 

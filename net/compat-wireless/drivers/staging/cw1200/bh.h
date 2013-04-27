@@ -14,7 +14,7 @@
 
 /* extern */ struct cw1200_common;
 
-#define SDIO_BLOCK_SIZE (512)
+#define SDIO_BLOCK_SIZE (528)
 
 int cw1200_register_bh(struct cw1200_common *priv);
 void cw1200_unregister_bh(struct cw1200_common *priv);

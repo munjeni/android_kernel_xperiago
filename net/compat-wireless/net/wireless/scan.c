@@ -2,7 +2,7 @@
  * cfg80211 scan result handling
  *
  * Copyright 2008 Johannes Berg <johannes@sipsolutions.net>
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012, 2013 Sony Mobile Communications AB.
  */
 #include <linux/kernel.h>
 #include <linux/slab.h>

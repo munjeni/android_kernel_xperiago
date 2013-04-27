@@ -207,10 +207,6 @@ enum mcde_display_rotation {
 #define MCDE_BUF_START_ALIGMENT 8
 #define MCDE_BUF_LINE_ALIGMENT 8
 
-//#define MCDE_PIXFETCH_WTRMRKLVL_OVL0	48
-//#define MCDE_PIXFETCH_WTRMRKLVL_OVL1	64
-//#define MCDE_PIXFETCH_WTRMRKLVL_OVL2	192
-
 /* Tv-out defines */
 #define MCDE_CONFIG_TVOUT_BACKGROUND_LUMINANCE		0x83
 #define MCDE_CONFIG_TVOUT_BACKGROUND_CHROMINANCE_CB	0x9C
@@ -286,7 +282,6 @@ void mcde_chnl_set_col_convert(struct mcde_chnl_state *chnl,
 					enum   mcde_col_convert    convert);
 int mcde_chnl_set_video_mode(struct mcde_chnl_state *chnl,
 					struct mcde_video_mode *vmode);
-/* TODO: Remove rotbuf* parameters when ESRAM allocator is implemented*/
 int mcde_chnl_set_rotation(struct mcde_chnl_state *chnl,
 					enum mcde_display_rotation rotation);
 bool mcde_chnl_is_rotated_90(struct mcde_chnl_state *chnl);
@@ -299,6 +294,7 @@ void mcde_chnl_update_sync_src(struct mcde_chnl_state *chnl,
 				enum mcde_sync_src src);
 int mcde_chnl_update(struct mcde_chnl_state *chnl,
 			bool tripple_buffer);
+int mcde_chnl_wait_for_next_vsync(struct mcde_chnl_state *chnl, s64 *timestamp);
 void mcde_chnl_put(struct mcde_chnl_state *chnl);
 
 void mcde_chnl_stop_flow(struct mcde_chnl_state *chnl);

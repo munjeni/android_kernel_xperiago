@@ -74,6 +74,7 @@ struct dss_context {
 	struct mcde_display_device *ddev;
 	struct mcde_overlay *ovly[NUM_COMPDEV_BUFS];
 	struct compdev_buffer ovly_buffer[NUM_COMPDEV_BUFS];
+	struct compdev_buffer prev_ovly_buffer[NUM_COMPDEV_BUFS];
 	enum compdev_transform current_buffer_transform;
 	int blt_handle;
 	struct buffer_cache_context cache_ctx;
@@ -118,6 +119,10 @@ static struct compdev *compdevs[MAX_NBR_OF_COMPDEVS];
 
 static int release_prev_frame(struct dss_context *dss_ctx);
 static int compdev_clear_screen_locked(struct compdev *cd);
+
+/* Parameter used by wait_for_vsync to avoid having to lock
+ * the mutex for this call */
+static struct mcde_display_device *vsync_ddev = NULL;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void early_suspend(struct early_suspend *data)
@@ -181,6 +186,8 @@ static void compdev_device_release(struct kref *ref)
 	if (cd->dss_ctx.blt_handle >= 0)
 		b2r2_blt_close(cd->dss_ctx.blt_handle);
 
+	/* Release previous 2 frames that are still reference counted */
+	release_prev_frame(&cd->dss_ctx);
 	release_prev_frame(&cd->dss_ctx);
 
 	/* Free potential temp buffers */
@@ -418,18 +425,21 @@ static int release_prev_frame(struct dss_context *dss_ctx)
 {
 	int ret = 0;
 	int i;
+	struct compdev_buffer *prev_frame;
 
 	/* Handle unpin of previous buffers */
 	for (i = 0; i < NUM_COMPDEV_BUFS; i++) {
-		if (dss_ctx->ovly_buffer[i].type ==
+		prev_frame = &dss_ctx->prev_ovly_buffer[i];
+		if (prev_frame->type ==
 				COMPDEV_PTR_HWMEM_BUF_NAME_OFFSET) {
-			if (!IS_ERR_OR_NULL(dss_ctx->ovly_buffer[i].alloc)) {
-				hwmem_release(dss_ctx->ovly_buffer[i].alloc);
-				if (dss_ctx->ovly_buffer[i].paddr != 0)
-					hwmem_unpin(
-						dss_ctx->ovly_buffer[i].alloc);
+			if (!IS_ERR_OR_NULL(prev_frame->alloc)) {
+				hwmem_release(prev_frame->alloc);
+				if (prev_frame->paddr != 0)
+					hwmem_unpin(prev_frame->alloc);
 			}
 		}
+		*prev_frame = dss_ctx->ovly_buffer[i];
+
 		dss_ctx->ovly_buffer[i].alloc = NULL;
 		dss_ctx->ovly_buffer[i].size = 0;
 		dss_ctx->ovly_buffer[i].paddr = 0;
@@ -601,9 +611,11 @@ static int compdev_post_buffers_dss(struct dss_context *dss_ctx,
 
 	/* Do the display update */
 	for (i = 0; i < 2; i++) {
-		if (update_ovly[i])
+		if (update_ovly[i]) {
 			mcde_dss_update_overlay(dss_ctx->ovly[i],
 					tripple_buffer);
+			break;
+		}
 	}
 
 	return ret;
@@ -754,11 +766,45 @@ static void update_transform(struct compdev *cd,
 	}
 }
 
+static void compdev_set_background_fb(
+	struct compdev *cd,
+	struct compdev_img *image1,
+	struct compdev_img *image2)
+{
+	struct compdev_img *img[2] = {image1, image2};
+	int i;
+
+	for (i = 0; i < 2; i++) {
+
+		int cur = i;
+		int next = (i + 1) & 1;
+
+		if ((img[cur]->flags & COMPDEV_OVERLAY_FLAG) &&
+			(img[next]->flags & COMPDEV_FRAMEBUFFER_FLAG)) {
+			/* Save img[next] as the framebuffer */
+			dev_dbg(cd->dev, "%s: Save img%i=0x%x for reuse\n",
+				__func__, next + 1,
+				(uint32_t)img[next]);
+			/* Make sure memory will remain */
+			if (img[next]->buf.type ==
+					COMPDEV_PTR_HWMEM_BUF_NAME_OFFSET) {
+				cd->fb_image_alloc = hwmem_resolve_by_name(
+					img[next]->buf.hwmem_buf_name);
+				if (IS_ERR_OR_NULL(cd->fb_image_alloc)) {
+					dev_err(cd->dev,
+						"%s: HWMEM resolve failed\n",
+						__func__);
+					cd->fb_image_alloc = NULL;
+				}
+			}
+			cd->fb_image = *img[next];
+			break;
+		}
+	}
+}
 static int compdev_reuse_fb(struct compdev *cd, struct compdev_img **image1,
 		struct compdev_img **image2)
 {
-	struct compdev_img *img1 = *image1;
-	struct compdev_img *img2 = *image2;
 	/*
 	 * Both img1 and img2 must be set in order to have a fully
 	 * composited framebuffer together with an overlay
@@ -770,44 +816,13 @@ static int compdev_reuse_fb(struct compdev *cd, struct compdev_img **image1,
 			cd->fb_image_alloc = NULL;
 		}
 
-		if ((img2 != NULL) && (img1 != NULL) &&
-			(img1->flags & COMPDEV_OVERLAY_FLAG) &&
-			(img2->flags & COMPDEV_FRAMEBUFFER_FLAG)) {
-			/* Save img2 as the framebuffer */
-			dev_dbg(cd->dev, "%s: Save img2=0x%x for reuse\n",
-				__func__, (uint32_t)img2);
-			/* Make sure memory will remain */
-			if (img2->buf.type ==
-					COMPDEV_PTR_HWMEM_BUF_NAME_OFFSET) {
-				cd->fb_image_alloc = hwmem_resolve_by_name(
-					img2->buf.hwmem_buf_name);
-				if (IS_ERR_OR_NULL(cd->fb_image_alloc)) {
-					dev_err(cd->dev,
-						"%s: HWMEM resolve failed\n",
-						__func__);
-				}
-			}
-			cd->fb_image = *img2;
-		} else if ((img2 != NULL) && (img1 != NULL) &&
-			   (img2->flags & COMPDEV_OVERLAY_FLAG) &&
-			   (img1->flags & COMPDEV_FRAMEBUFFER_FLAG)) {
-			/* Save img1 as the framebuffer */
-			dev_dbg(cd->dev, "%s: Save img1=0x%x for reuse\n",
-				__func__, (uint32_t)img1);
-			/* Make sure memory will remain */
-			if (img1->buf.type ==
-					COMPDEV_PTR_HWMEM_BUF_NAME_OFFSET) {
-				cd->fb_image_alloc = hwmem_resolve_by_name(
-					img1->buf.hwmem_buf_name);
-				if (IS_ERR_OR_NULL(cd->fb_image_alloc)) {
-					dev_err(cd->dev,
-						"%s: HWMEM resolve failed\n",
-						__func__);
-				}
-			}
-			cd->fb_image = *img1;
-		}
-	} else if ((img1->flags & COMPDEV_OVERLAY_FLAG)) {
+		if ((*image1 != NULL) && (*image2 != NULL))
+			compdev_set_background_fb(
+				cd,
+				*image1,
+				*image2);
+
+	} else if ((*image1)->flags & COMPDEV_OVERLAY_FLAG) {
 		/* Let's reuse the previously stored image */
 		dev_dbg(cd->dev, "%s: Reuse fb_img\n", __func__);
 		*image2 = &cd->fb_image;
@@ -950,8 +965,8 @@ static int compdev_post_buffer_locked(struct compdev *cd,
 				(cd->sync_count > 1)) {
 			cd->sync_count--;
 		} else {
-			struct compdev_img *img1 = NULL;
-			struct compdev_img *img2 = NULL;
+			struct compdev_img *img[2] = {NULL, NULL};
+			int i;
 			struct compdev_img_internal *tmp_handle;
 
 			/* Unblank if blanked */
@@ -961,34 +976,35 @@ static int compdev_post_buffer_locked(struct compdev *cd,
 			if (cd->sync_count)
 				cd->sync_count--;
 
-			img1 = cd->pimages[0];
+			img[0] = cd->pimages[0];
 			if (cd->image_count > 1)
-				img2 = cd->pimages[1];
+				img[1] = cd->pimages[1];
 
-			compdev_reuse_fb(cd, &img1, &img2);
+			compdev_reuse_fb(cd, &img[0], &img[1]);
 
 			/* Do the refresh */
 			compdev_post_buffers_dss(&cd->dss_ctx,
-				img1, img2, true, cd->mcde_transform);
+				img[0], img[1], true, cd->mcde_transform);
 
 			/*
 			 * Free references to the temp buffers,
 			 * dss worker now "owns" the hwmem handles.
 			 */
-			if ((img1 != NULL) && (img1->flags &
+			for (i = 0; i < 2; i++)
+				if ((img[i] != NULL) &&
+					(img[i]->flags &
 					COMPDEV_INTERNAL_TEMP_FLAG)) {
-				tmp_handle = container_of(img1,
-					struct compdev_img_internal, img);
-				compdev_free_img(&cd->dss_ctx.cache_ctx,
-					tmp_handle);
-			}
-			if ((img2 != NULL) && (img2->flags &
-					COMPDEV_INTERNAL_TEMP_FLAG)) {
-				tmp_handle = container_of(img2,
-					struct compdev_img_internal, img);
-				compdev_free_img(&cd->dss_ctx.cache_ctx,
-					tmp_handle);
-			}
+					tmp_handle = container_of(img[i],
+						struct compdev_img_internal,
+						img);
+
+					/* don't free the background image */
+					if ((void *)tmp_handle !=
+						(void *)&cd->fb_image)
+						compdev_free_img(
+							&cd->dss_ctx.cache_ctx,
+							tmp_handle);
+				}
 
 			cd->sync_count = 0;
 			cd->image_count = 0;
@@ -1145,6 +1161,15 @@ static int compdev_get_listener_state_locked(struct compdev *cd,
 	return ret;
 }
 
+static int compdev_wait_for_vsync_unlocked(s64 *timestamp)
+{
+	int ret;
+
+	ret = mcde_dss_wait_for_vsync(vsync_ddev, timestamp);
+
+	return ret;
+}
+
 static long compdev_ioctl(struct file *file,
 		unsigned int cmd,
 		unsigned long arg)
@@ -1155,12 +1180,12 @@ static long compdev_ioctl(struct file *file,
 	struct compdev_scene_info s_info;
 	struct compdev_video_mode video_mode;
 
-	mutex_lock(&cd->lock);
-
 	switch (cmd) {
 	case COMPDEV_GET_SIZE_IOC:
 	{
 		struct compdev_size tmp;
+		mutex_lock(&cd->lock);
+
 		ret = compdev_get_size_locked(&(cd->dss_ctx), &tmp);
 		if (ret) {
 			mutex_unlock(&cd->lock);
@@ -1170,19 +1195,25 @@ static long compdev_ioctl(struct file *file,
 							sizeof(tmp));
 		if (ret)
 			ret = -EFAULT;
+
+		mutex_unlock(&cd->lock);
+		break;
 	}
-	break;
 	case COMPDEV_GET_LISTENER_STATE_IOC:
 	{
 		enum compdev_listener_state state;
+		mutex_lock(&cd->lock);
+
 		compdev_get_listener_state_locked(cd, &state);
 		ret = copy_to_user((void __user *)arg, &state,
 				sizeof(state));
 		if (ret)
 			ret = -EFAULT;
+		mutex_unlock(&cd->lock);
+		break;
 	}
-	break;
 	case COMPDEV_POST_BUFFER_IOC:
+		mutex_lock(&cd->lock);
 		/* Get the user data */
 		if (copy_from_user(&img, (void *)arg, sizeof(img))) {
 			dev_warn(cd->dev,
@@ -1192,9 +1223,10 @@ static long compdev_ioctl(struct file *file,
 			return -EFAULT;
 		}
 		ret = compdev_post_buffer_locked(cd, &img);
-
+		mutex_unlock(&cd->lock);
 		break;
 	case COMPDEV_POST_SCENE_INFO_IOC:
+		mutex_lock(&cd->lock);
 		/* Get the user data */
 		if (copy_from_user(&s_info, (void *)arg, sizeof(s_info))) {
 			dev_warn(cd->dev,
@@ -1206,9 +1238,10 @@ static long compdev_ioctl(struct file *file,
 		mutex_lock(&cd->si_lock);
 		ret = compdev_post_scene_info_locked(cd, &s_info);
 		mutex_unlock(&cd->si_lock);
-
+		mutex_unlock(&cd->lock);
 		break;
 	case COMPDEV_SET_VIDEO_MODE_IOC:
+		mutex_lock(&cd->lock);
 		/* Get the user data */
 		if (copy_from_user(&video_mode, (void *)arg,
 					sizeof(video_mode))) {
@@ -1220,14 +1253,28 @@ static long compdev_ioctl(struct file *file,
 		}
 		ret = compdev_set_video_mode_locked(cd, &video_mode);
 
+		mutex_unlock(&cd->lock);
 		break;
+	case COMPDEV_WAIT_FOR_VSYNC_IOC:
+	{
+		s64 timestamp;
 
+		ret = compdev_wait_for_vsync_unlocked(&timestamp);
 
+		if (copy_to_user((void __user *)arg, &timestamp,
+				sizeof(timestamp))) {
+			dev_warn(cd->dev,
+					"%s: copy_to_user failed\n", __func__);
+			return -EFAULT;
+		}
+		if (ret)
+			ret = -EFAULT;
+
+		break;
+	}
 	default:
 		ret = -ENOSYS;
 	}
-
-	mutex_unlock(&cd->lock);
 
 	return ret;
 }
@@ -1266,6 +1313,7 @@ static int init_dss_context(struct dss_context *dss_ctx,
 #endif
 
 	dss_ctx->ddev = ddev;
+	vsync_ddev = ddev;
 	memset(&dss_ctx->cache_ctx, 0, sizeof(dss_ctx->cache_ctx));
 	dss_ctx->blt_handle = -1;
 
@@ -1476,6 +1524,17 @@ int compdev_get_listener_state(struct compdev *cd,
 	return ret;
 }
 EXPORT_SYMBOL(compdev_get_listener_state);
+
+int compdev_wait_for_vsync(struct compdev *cd, s64 *timestamp)
+{
+	int ret = 0;
+	if (cd == NULL)
+		return -ENOMEM;
+
+	ret = compdev_wait_for_vsync_unlocked(timestamp);
+	return ret;
+}
+EXPORT_SYMBOL(compdev_wait_for_vsync);
 
 const char *compdev_get_device_name(struct compdev *cd)
 {

@@ -411,6 +411,21 @@ enum mcde_display_rotation mcde_dss_get_rotation(
 }
 EXPORT_SYMBOL(mcde_dss_get_rotation);
 
+int mcde_dss_wait_for_vsync(struct mcde_display_device *ddev, s64 *timestamp)
+{
+	int ret;
+
+	/*
+	 * Do not take the display_lock so that other dss functions can
+	 * be called from another thread.
+	 */
+	mutex_lock(&ddev->vsync_lock); /* Protect against multi-thread usage */
+	ret = ddev->wait_for_vsync(ddev, timestamp);
+	mutex_unlock(&ddev->vsync_lock);
+	return ret;
+}
+EXPORT_SYMBOL(mcde_dss_wait_for_vsync);
+
 bool mcde_dss_secure_output(struct mcde_display_device *ddev)
 {
 	bool ret;

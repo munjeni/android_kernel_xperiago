@@ -3070,8 +3070,10 @@ static inline void l2cap_send_i_or_rr_or_rnr(struct l2cap_chan *chan)
 		set_bit(CONN_RNR_SENT, &chan->conn_state);
 	}
 
-	if (test_bit(CONN_REMOTE_BUSY, &chan->conn_state))
-		l2cap_retransmit_frames(chan);
+	if (test_and_clear_bit(CONN_REMOTE_BUSY, &chan->conn_state) &&
+	    chan->unacked_frames > 0) {
+		__set_retrans_timer(chan);
+	}
 
 	l2cap_ertm_send(chan);
 

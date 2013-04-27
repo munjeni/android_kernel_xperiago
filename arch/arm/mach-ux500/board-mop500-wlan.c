@@ -9,6 +9,7 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+#include <linux/delay.h>
 #include <asm/mach-types.h>
 #include <mach/irqs.h>
 #include "pins.h"
@@ -61,6 +62,7 @@ static int cw1200_clk_ctrl(const struct cw1200_platform_data *pdata,
 {
 	static const char *clock_name = "sys_clk_out";
 	int ret = 0;
+	int try = 5;
 
 	if (enable) {
 		clk_dev = clk_get(&cw1200_device.dev, clock_name);
@@ -70,7 +72,12 @@ static int cw1200_clk_ctrl(const struct cw1200_platform_data *pdata,
 				"%s: Failed to get clk '%s': %d\n",
 				__func__, clock_name, ret);
 		} else {
-			ret = clk_enable(clk_dev);
+			while (try--) {
+				ret = clk_enable(clk_dev);
+				if (ret == 0)
+					break;
+				msleep(50);
+			}
 			if (ret) {
 				clk_put(clk_dev);
 				dev_warn(&cw1200_device.dev,

@@ -2,8 +2,6 @@
  * Datapath implementation for ST-Ericsson CW1200 mac80211 drivers
  *
  * Copyright (c) 2010, ST-Ericsson
- * Copyright (C) 2012, Sony Mobile Communications AB.
- *
  * Author: Dmitry Tarnyagin <dmitry.tarnyagin@stericsson.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -790,27 +788,6 @@ cw1200_tx_h_pm_state(struct cw1200_common *priv,
 	return !was_buffered;
 }
 
-static void
-cw1200_tx_h_ba_stat(struct cw1200_common *priv,
-		    struct cw1200_txinfo *t)
-{
-	if (priv->join_status != CW1200_JOIN_STATUS_STA)
-		return;
-	if (!cw1200_is_ht(&priv->ht_info))
-		return;
-	if (!ieee80211_is_data(t->hdr->frame_control))
-		return;
-
-	spin_lock_bh(&priv->ba_lock);
-	priv->ba_acc += t->skb->len - t->hdrlen;
-	if (!(priv->ba_cnt_rx || priv->ba_cnt)) {
-		mod_timer(&priv->ba_timer,
-			jiffies + CW1200_BLOCK_ACK_INTERVAL);
-	}
-	priv->ba_cnt++;
-	spin_unlock_bh(&priv->ba_lock);
-}
-
 static int
 cw1200_tx_h_skb_pad(struct cw1200_common *priv,
 		    struct wsm_tx *wsm,
@@ -890,7 +867,6 @@ void cw1200_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	rcu_read_lock();
 	sta = rcu_dereference(t.tx_info->control.sta);
 
-	cw1200_tx_h_ba_stat(priv, &t);
 	spin_lock_bh(&priv->ps_state_lock);
 	{
 		tid_update = cw1200_tx_h_pm_state(priv, &t);
@@ -1041,6 +1017,17 @@ void cw1200_tx_confirm_cb(struct cw1200_common *priv,
 			ht_flags |= IEEE80211_TX_RC_GREEN_FIELD;
 
 		if (likely(!arg->status)) {
+			spin_lock(&priv->bss_loss_lock);
+			if ((priv->bss_loss_status == CW1200_BSS_LOSS_CONFIRMING) &&
+			    (priv->bss_loss_checking < BSS_LOSS_CHECKING_MAX_TRY)) {
+				priv->bss_loss_status = CW1200_BSS_LOSS_CHECKING;
+				priv->bss_loss_checking++;
+				spin_unlock(&priv->bss_loss_lock);
+				cancel_delayed_work(&priv->bss_loss_work);
+				queue_delayed_work(priv->workqueue,
+                                          &priv->bss_loss_work, 0);
+			} else
+				spin_unlock(&priv->bss_loss_lock);
 			tx->flags |= IEEE80211_TX_STAT_ACK;
 			priv->cqm_tx_failure_count = 0;
 			++tx_count;
@@ -1059,6 +1046,7 @@ void cw1200_tx_confirm_cb(struct cw1200_common *priv,
 					arg->packetID) {
 				priv->bss_loss_status =
 					CW1200_BSS_LOSS_CONFIRMED;
+				priv->bss_loss_checking = 0;
 				spin_unlock(&priv->bss_loss_lock);
 				cancel_delayed_work(&priv->bss_loss_work);
 				queue_delayed_work(priv->workqueue,
@@ -1140,25 +1128,6 @@ void cw1200_skb_dtor(struct cw1200_common *priv,
 	}
 	if (likely(!cw1200_is_itp(priv)))
 		ieee80211_tx_status(priv->hw, skb);
-}
-
-static void
-cw1200_rx_h_ba_stat(struct cw1200_common *priv,
-		    size_t hdrlen, size_t skb_len )
-{
-	if (priv->join_status != CW1200_JOIN_STATUS_STA)
-		return;
-	if (!cw1200_is_ht(&priv->ht_info))
-		return;
-
-	spin_lock_bh(&priv->ba_lock);
-	priv->ba_acc_rx += skb_len - hdrlen;
-	if (!(priv->ba_cnt_rx || priv->ba_cnt)) {
-		mod_timer(&priv->ba_timer,
-			jiffies + CW1200_BLOCK_ACK_INTERVAL);
-	}
-	priv->ba_cnt_rx++;
-	spin_unlock_bh(&priv->ba_lock);
 }
 
 void cw1200_rx_cb(struct cw1200_common *priv,
@@ -1355,9 +1324,6 @@ void cw1200_rx_cb(struct cw1200_common *priv,
 		grace_period = 5 * HZ;
 	else
 		grace_period = 1 * HZ;
-
-	if (ieee80211_is_data(frame->frame_control))
-		cw1200_rx_h_ba_stat( priv, hdrlen, skb->len);
 
 	cw1200_pm_stay_awake(&priv->pm_state, grace_period);
 

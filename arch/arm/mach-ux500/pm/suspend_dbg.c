@@ -89,6 +89,8 @@ void ux500_suspend_dbg_sleep_status(bool is_deepsleep)
 			deepsleeps_done++;
 		else
 			deepsleeps_failed++;
+		pr_info("VBat after sleep: 0x%x\n",
+			db8500_prcmu_get_vbat_after_deep_sleep());
 	} else {
 		pr_info("Returning from ApSleep. PRCMU ret: 0x%x - %s\n",
 			prcmu_status,

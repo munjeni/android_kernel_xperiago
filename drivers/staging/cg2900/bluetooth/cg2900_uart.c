@@ -58,7 +58,7 @@
 /* Timers used in milliseconds */
 #define UART_TX_TIMEOUT		100
 #define UART_RX_TIMEOUT		20
-#define UART_RESP_TIMEOUT	1000
+#define UART_RESP_TIMEOUT	3000
 #define UART_RESUME_TIMEOUT	20
 /* Minimum time host should maintain the break */
 #define UART_MIN_BREAK_ON_TIME 5

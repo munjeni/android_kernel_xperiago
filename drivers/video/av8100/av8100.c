@@ -5021,7 +5021,8 @@ static void late_resume_pd_cancel(struct av8100_device *adev)
 static void late_resume_handle(struct av8100_device *adev)
 {
 	adev->params.suspended = false;
-	if (!adev->params.disp_on) {
+	if (!adev->params.disp_on ||
+		    av8100_status_get().av8100_state < AV8100_OPMODE_STANDBY) {
 		if (adev->timer_flag == TIMER_POWERDOWN)
 			late_resume_pd_cancel(adev);
 		clr_flag(adev, AV8100_EVENTS);
@@ -5256,4 +5257,3 @@ module_exit(av8100_exit);
 MODULE_AUTHOR("Per Persson <per.xb.persson@stericsson.com>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("ST-Ericsson hdmi display driver");
-

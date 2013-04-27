@@ -97,6 +97,7 @@ static int cw1200_pm_init_common(struct cw1200_pm_state *pm,
 				  struct cw1200_common *priv)
 {
 	spin_lock_init(&pm->lock);
+
 	return 0;
 }
 
@@ -309,9 +310,6 @@ int cw1200_wow_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 	if (ret)
 		goto revert5;
 
-	/* Cancel block ack stat timer */
-	del_timer_sync(&priv->ba_timer);
-
 	/* Store suspend state */
 	pm_state->suspend_state = state;
 
@@ -403,13 +401,6 @@ int cw1200_wow_resume(struct ieee80211_hw *hw)
 			state->direct_probe);
 	cw1200_resume_work(priv, &priv->link_id_gc_work,
 			state->link_id_gc);
-
-	/* Restart block ack stat */
-	spin_lock_bh(&priv->ba_lock);
-	if (priv->ba_cnt)
-		mod_timer(&priv->ba_timer,
-			jiffies + CW1200_BLOCK_ACK_INTERVAL);
-	spin_unlock_bh(&priv->ba_lock);
 
 	/* Remove UDP port filter */
 	wsm_set_udp_port_filter(priv, &cw1200_udp_port_filter_off);

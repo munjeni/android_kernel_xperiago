@@ -363,6 +363,7 @@ struct hci_conn *hci_conn_add(struct hci_dev *hdev, int type,
 	if (!conn)
 		return NULL;
 
+	conn->pkt_reserved = 0;
 	bacpy(&conn->dst, dst);
 	conn->hdev  = hdev;
 	conn->type  = type;
@@ -415,6 +416,21 @@ struct hci_conn *hci_conn_add(struct hci_dev *hdev, int type,
 	tasklet_enable(&hdev->tx_task);
 
 	return conn;
+}
+
+void hci_conn_reserve_credit(struct hci_dev *hdev, __u16 handle, __u8 num_pkt)
+{
+	struct list_head *connlist;
+
+	list_for_each(connlist, &hdev->conn_hash.list) {
+		register struct hci_conn *conn;
+		conn = list_entry(connlist, struct hci_conn, list);
+
+		if (conn->handle == handle) {
+			conn->pkt_reserved = num_pkt;
+			break;
+		}
+	}
 }
 
 int hci_conn_del(struct hci_conn *conn)

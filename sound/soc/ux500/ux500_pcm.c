@@ -160,6 +160,8 @@ ux500_pcm_dma_start(
 
 	dma_async_issue_pending(private->pipeid);
 
+	pr_debug("%s: Leave\n", __func__);
+
 	return 0;
 }
 
@@ -169,11 +171,23 @@ ux500_pcm_dma_stop(struct work_struct *work)
 	struct ux500_pcm_private *private = container_of(work,
 		struct ux500_pcm_private, ws_stop);
 
-	if (private->pipeid != NULL) {
-		dmaengine_terminate_all(private->pipeid);
-		dma_release_channel(private->pipeid);
+	pr_debug("%s: Enter\n", __func__);
+
+	if (private != NULL) {
+		struct dma_chan *chan;
+
+		mutex_lock(&private->pipeLock);
+		chan = private->pipeid;
 		private->pipeid = NULL;
+		mutex_unlock(&private->pipeLock);
+
+		if (chan != NULL) {
+			dmaengine_terminate_all(chan);
+			dma_release_channel(chan);
+		}
 	}
+
+	pr_debug("%s: Leave\n", __func__);
 }
 
 static void
@@ -234,6 +248,7 @@ static int ux500_pcm_open(struct snd_pcm_substream *substream)
 	private = kzalloc(sizeof(struct ux500_pcm_private), GFP_KERNEL);
 	if (private == NULL)
 		return -ENOMEM;
+	mutex_init(&private->pipeLock);
 	private->msp_id = dai->id;
 	private->wq = alloc_ordered_workqueue("ux500/pcm", 0);
 	INIT_WORK(&private->ws_stop, ux500_pcm_dma_stop);
@@ -247,6 +262,8 @@ static int ux500_pcm_open(struct snd_pcm_substream *substream)
 	runtime->hw = (stream_id == SNDRV_PCM_STREAM_PLAYBACK) ?
 		ux500_pcm_hw_playback : ux500_pcm_hw_capture;
 
+	pr_debug("%s: Leave\n", __func__);
+
 	return 0;
 }
 
@@ -256,13 +273,23 @@ static int ux500_pcm_close(struct snd_pcm_substream *substream)
 
 	pr_debug("%s: Enter\n", __func__);
 
-	if (private->pipeid != NULL) {
-		dma_release_channel(private->pipeid);
+	if (private != NULL) {
+		struct dma_chan *chan;
+
+		mutex_lock(&private->pipeLock);
+		chan = private->pipeid;
 		private->pipeid = NULL;
+		mutex_unlock(&private->pipeLock);
+
+		if (chan != NULL) {
+			dma_release_channel(chan);
+		}
+
+		destroy_workqueue(private->wq);
+		kfree(private);
 	}
 
-	destroy_workqueue(private->wq);
-	kfree(private);
+	pr_debug("%s: Leave\n", __func__);
 
 	return 0;
 }
@@ -342,11 +369,16 @@ ux500_pcm_prepare(struct snd_pcm_substream *substream)
 
 	pr_debug("%s: Enter\n", __func__);
 
-	flush_workqueue(private->wq);
+	struct dma_chan *chan;
 
-	if (private->pipeid != NULL) {
-		dma_release_channel(private->pipeid);
-		private->pipeid = NULL;
+	mutex_lock(&private->pipeLock);
+	chan = private->pipeid;
+	private->pipeid = NULL;
+	mutex_unlock(&private->pipeLock);
+
+	if (chan != NULL) {
+		flush_workqueue(private->wq);
+		dma_release_channel(chan);
 	}
 
 	dma_params = snd_soc_dai_get_dma_data(dai, substream);
@@ -391,7 +423,13 @@ ux500_pcm_prepare(struct snd_pcm_substream *substream)
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
 
-	private->pipeid = dma_request_channel(mask, stedma40_filter, dma_cfg);
+	chan  = dma_request_channel(mask, stedma40_filter, dma_cfg);
+
+	mutex_lock(&private->pipeLock);
+	private->pipeid = chan;
+	mutex_unlock(&private->pipeLock);
+
+	pr_debug("%s: Leave\n", __func__);
 
 	return 0;
 }

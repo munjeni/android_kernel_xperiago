@@ -253,7 +253,7 @@ struct lm3560_drv_data {
 	int torch_current_shift;
 	int flash_current_shift;
 	int strobe_trigger_shift;
-	bool on_duty;
+	enum duty_reason on_duty;
 	struct mutex lock;
 	struct lm3560_reg_shadow shadow[LM3560_REG_NUM];
 };
@@ -330,7 +330,7 @@ static int lm3560_set_reg_data(struct lm3560_drv_data *data,
 static int lm3560_sync_shadow(struct lm3560_drv_data *data)
 {
 	unsigned i;
-	s32 rc;
+	s32 rc = 0;
 
 	for (i = 0; i < ARRAY_SIZE(data->shadow); i++) {
 		if (data->shadow[i].updated) {
@@ -1633,8 +1633,15 @@ static int lm3560_suspend(struct device *dev)
 	struct lm3560_platform_data *pdata = dev->platform_data;
 	int result;
 
-	result = lm3560_set_reg_data(data, LM3560_REG_ENABLE,
-				     LM3560_ENABLE_EN_MASK , 0);
+	/* When suspend is called after unsucessfull resume (it happens a few
+	 * times in each resume cycle) shadow has not been synced back to
+	 * registers yet. Thus we have to properly set full contents of the
+	 * register here. Disable EN0 bit & EN1 bit and leave the rest as is
+	 * in the shadow.
+	 */
+	result = lm3560_set_reg_data(data, LM3560_REG_ENABLE, 0xFF,
+				     data->shadow[LM3560_REG_ENABLE].val &
+				     ~LM3560_ENABLE_EN_MASK);
 	if (result) {
 		dev_err(dev, "%s: set_reg_data error\n", __func__);
 		goto exit_suspend;

@@ -1236,6 +1236,9 @@ static int ab8500_charger_set_vbus_in_curr(struct ab8500_charger *di,
 		min_value =
 			min(di->vbus_drop.real_max_usb_in_curr[0], min_value);
 
+	if (di->usb_state.usb_current >= 100)
+		min_value = min(di->usb_state.usb_current, min_value);
+
 	switch (min_value) {
 	case 100:
 		if (di->vbat < VBAT_TRESH_IP_CUR_RED)
@@ -2863,7 +2866,7 @@ static int __devinit ab8500_charger_probe(struct platform_device *pdev)
 		ARRAY_SIZE(ab8500_charger_voltage_map) - 1];
 	di->usb_chg.max_out_curr = ab8500_charger_current_map[
 		ARRAY_SIZE(ab8500_charger_current_map) - 1];
-
+	di->usb_state.usb_current = -1;
 
 	/* Create a work queue for the charger */
 	di->charger_wq =

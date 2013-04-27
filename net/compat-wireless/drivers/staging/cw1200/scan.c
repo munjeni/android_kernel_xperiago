@@ -269,6 +269,7 @@ static void cw1200_scan_restart_delayed(struct cw1200_common *priv)
 				"beacons.\n", tmo);
 		spin_lock(&priv->bss_loss_lock);
 		priv->bss_loss_status = CW1200_BSS_LOSS_NONE;
+		priv->bss_loss_checking = 0;
 		spin_unlock(&priv->bss_loss_lock);
 		cancel_delayed_work_sync(&priv->bss_loss_work);
 		queue_delayed_work(priv->workqueue,
@@ -321,7 +322,8 @@ void cw1200_scan_complete_cb(struct cw1200_common *priv,
 void cw1200_clear_recent_scan_work(struct work_struct *work)
 {
 	struct cw1200_common *priv =
-		container_of(work, struct cw1200_common, clear_recent_scan_work.work);
+		container_of(work, struct cw1200_common,
+				clear_recent_scan_work.work);
 	atomic_xchg(&priv->recent_scan, 0);
 }
 

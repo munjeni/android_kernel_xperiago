@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2008-2009 ST-Ericsson
  * Copyright (C) 2011 Sony Ericsson Mobile Communications AB.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2, as
@@ -2159,6 +2159,13 @@ static struct hash_platform_data u8500_hash1_platform_data = {
 	.dma_filter = stedma40_filter,
 };
 
+#ifdef CONFIG_SONY_SSM
+static struct platform_device sony_ssm_device = {
+	.name = "sony_ssm",
+	.id = -1,
+};
+#endif
+
 /* add any platform devices here - TODO */
 static struct platform_device *mop500_platform_devs[] __initdata = {
 #ifdef CONFIG_U8500_SIM_DETECT
@@ -2193,6 +2200,10 @@ static struct platform_device *mop500_platform_devs[] __initdata = {
 #endif
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 	&ram_console_device,
+#endif
+	&db8500_mali_gpu_device,
+#ifdef CONFIG_SONY_SSM
+	&sony_ssm_device,
 #endif
 };
 

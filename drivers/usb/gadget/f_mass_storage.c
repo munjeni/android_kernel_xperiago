@@ -961,6 +961,9 @@ static int do_write(struct fsg_common *common)
 	/* Detect non-sequential write */
 	if (curlun->last_offset != file_offset)
 		curlun->random_write_count++;
+	else if (curlun->random_write_count)
+		curlun->random_write_count--;
+
 	curlun->last_offset = file_offset + amount_left_to_write;
 
 	while (amount_left_to_write > 0) {

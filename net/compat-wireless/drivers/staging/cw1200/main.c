@@ -2,8 +2,6 @@
  * mac80211 glue code for mac80211 ST-Ericsson CW1200 drivers
  *
  * Copyright (c) 2010, ST-Ericsson
- * Copyright (C) 2012, Sony Mobile Communications AB.
- *
  * Author: Dmitry Tarnyagin <dmitry.tarnyagin@stericsson.com>
  *
  * Based on:
@@ -338,7 +336,8 @@ static struct ieee80211_hw *cw1200_init_common(size_t priv_data_len)
 	INIT_WORK(&priv->scan.work, cw1200_scan_work);
 	INIT_DELAYED_WORK(&priv->scan.probe_work, cw1200_probe_work);
 	INIT_DELAYED_WORK(&priv->scan.timeout, cw1200_scan_timeout);
-	INIT_DELAYED_WORK(&priv->clear_recent_scan_work, cw1200_clear_recent_scan_work);
+	INIT_DELAYED_WORK(&priv->clear_recent_scan_work,
+			cw1200_clear_recent_scan_work);
 	INIT_WORK(&priv->join_work, cw1200_join_work);
 	INIT_DELAYED_WORK(&priv->join_timeout, cw1200_join_timeout);
 	INIT_WORK(&priv->unjoin_work, cw1200_unjoin_work);
@@ -367,14 +366,10 @@ static struct ieee80211_hw *cw1200_init_common(size_t priv_data_len)
 	INIT_WORK(&priv->update_filtering_work, cw1200_update_filtering_work);
 	INIT_WORK(&priv->set_beacon_wakeup_period_work,
 		cw1200_set_beacon_wakeup_period_work);
-	INIT_WORK(&priv->ba_work, cw1200_ba_work);
 	init_timer(&priv->mcast_timeout);
 	priv->mcast_timeout.data = (unsigned long)priv;
 	priv->mcast_timeout.function = cw1200_mcast_timeout;
-	spin_lock_init(&priv->ba_lock);
-	init_timer(&priv->ba_timer);
-	priv->ba_timer.data = (unsigned long)priv;
-	priv->ba_timer.function = cw1200_ba_timer;
+
 	if (unlikely(cw1200_queue_stats_init(&priv->tx_queue_stats,
 			CW1200_LINK_ID_MAX,
 			cw1200_skb_dtor,
@@ -414,11 +409,6 @@ static struct ieee80211_hw *cw1200_init_common(size_t priv_data_len)
 	priv->wsm_cbc.suspend_resume = cw1200_suspend_resume;
 	/* priv->wsm_cbc.set_pm_complete = cw1200_set_pm_complete_cb; */
 	priv->wsm_cbc.channel_switch = cw1200_channel_switch_cb;
-
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-	/* We want to see it in IDD reports by default */
-	priv->wsm_enable_wsm_dumps = 1;
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
 
 	return hw;
 }
@@ -474,7 +464,6 @@ void cw1200_unregister_common(struct ieee80211_hw *dev)
 	ieee80211_unregister_hw(dev);
 
 	del_timer_sync(&priv->mcast_timeout);
-	del_timer_sync(&priv->ba_timer);
 
 	cw1200_debug_release(priv);
 
@@ -644,15 +633,6 @@ err1:
 	return err;
 }
 
-static void cw1200_common_cleanup(struct cw1200_common *priv)
-{
-	tx_policy_clean(priv);
-
-	/* TODO: what else ?? */
-	priv->wsm_rx_seq = 0;
-	priv->wsm_tx_seq = 0;
-}
-
 int cw1200_core_stop(struct cw1200_common *priv)
 {
 	priv->sbus_ops->irq_unsubscribe(priv->sbus_priv);
@@ -662,8 +642,11 @@ int cw1200_core_stop(struct cw1200_common *priv)
 	/* Power off HW */
 	WARN_ON(priv->sbus_ops->power_down(priv->sbus_priv));
 
-	/* Need some cleanup before next firmware load */
-	cw1200_common_cleanup(priv);
+	tx_policy_clean(priv);
+
+	/* TODO: what else ?? */
+	priv->wsm_rx_seq = 0;
+	priv->wsm_tx_seq = 0;
 
 	return 0;
 }

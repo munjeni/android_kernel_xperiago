@@ -15,6 +15,7 @@
 #include <linux/fb.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
+#include <linux/mutex.h>
 
 #include <linux/hwmem.h>
 #include <linux/io.h>
@@ -610,15 +611,34 @@ mcde_fb_blank_end:
 static int mcde_fb_pan_display(struct fb_var_screeninfo *var,
 	struct fb_info *fbi)
 {
+	int ret = 0;
 	dev_vdbg(fbi->dev, "%s\n", __func__);
 
 	if (var->xoffset == fbi->var.xoffset &&
-					var->yoffset == fbi->var.yoffset)
-		return 0;
+					var->yoffset == fbi->var.yoffset) {
+		int i;
+		struct mcde_fb *mfb = to_mcde_fb(fbi);
 
-	fbi->var.xoffset = var->xoffset;
-	fbi->var.yoffset = var->yoffset;
-	return apply_var(fbi, fb_to_display(fbi));
+		for (i = 0; i < mfb->num_ovlys; i++) {
+			struct mcde_overlay *ovly = mfb->ovlys[i];
+			struct mcde_overlay_info info;
+			int num_buffers;
+
+			get_ovly_info(fbi, ovly, &info);
+			if (mcde_dss_apply_overlay(ovly, &info))
+				ret = -1;
+
+			num_buffers = var->yres_virtual / var->yres;
+			if (mcde_dss_update_overlay(ovly, num_buffers == 3))
+				ret = -2;
+		}
+	} else {
+		fbi->var.xoffset = var->xoffset;
+		fbi->var.yoffset = var->yoffset;
+		ret = apply_var(fbi, fb_to_display(fbi));
+	}
+
+	return ret;
 }
 
 static void mcde_fb_rotate(struct fb_info *fbi, int rotate)
@@ -634,6 +654,25 @@ static int mcde_fb_ioctl(struct fb_info *fbi, unsigned int cmd,
 	if (cmd == MCDE_GET_BUFFER_NAME_IOC)
 		return mfb->alloc_name;
 
+	if (cmd == FBIO_WAITFORVSYNC) {
+		int ret;
+		s64 timestamp;
+		struct mcde_display_device *ddev = fb_to_display(fbi);
+
+		if (!ddev)
+			return -ENODEV;
+
+		/*
+		 * Unlock the fb_info lock. It is locked by fbmem.c.
+		 * This enables other FB operations (such as FB FBIOPAN_DISPLAY)
+		 * to be run concurrently since mcde_dss_wait_for_vsync will
+		 * wait.
+		 */
+		mutex_unlock(&fbi->lock);
+		ret = mcde_dss_wait_for_vsync(ddev, &timestamp);
+		mutex_lock(&fbi->lock);
+		return ret;
+	}
 	return -EINVAL;
 }
 

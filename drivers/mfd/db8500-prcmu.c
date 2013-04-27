@@ -104,6 +104,8 @@
 #define PRCM_ACK_MB3 0xDFC /* 4 bytes */
 #define PRCM_ACK_MB4 0xDF8 /* 4 bytes */
 #define PRCM_ACK_MB5 0xDF4 /* 4 bytes */
+#define PRCM_VBAT_H  0xDCF /* 1 byte */
+#define PRCM_VBAT_L  0xDD3 /* 1 byte */
 
 /* Mailbox 0 headers */
 #define MB0H_POWER_STATE_TRANS		0
@@ -563,6 +565,12 @@ static struct dsiescclk dsiescclk[3] = {
 #define PRCMU_DSI_RESET_SW		0x00000007
 
 #define PRCMU_PLLDSI_LOCKP_LOCKED	0x3
+
+u32 db8500_prcmu_get_vbat_after_deep_sleep(void)
+{
+	return (readb(tcdm_base + PRCM_VBAT_H) << 8) |
+		readb(tcdm_base + PRCM_VBAT_L);
+}
 
 int db8500_prcmu_enable_dsipll(void)
 {
@@ -2934,15 +2942,6 @@ static struct ux500_wdt_ops db8500_wdt_ops = {
 	.kick = kick_a9wdog,
 	.load = load_a9wdog,
 	.config = config_a9wdog,
-};
-
-/*
- * Thermal Sensor
- */
-static struct dbx500_temp_ops db8500_temp_ops;
-
-static struct dbx500_temp_pdata db8500_temp_pdata = {
-	.ops = &db8500_temp_ops,
 };
 
 static struct mfd_cell db8500_prcmu_devs[] = {

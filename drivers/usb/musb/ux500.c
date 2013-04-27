@@ -400,6 +400,24 @@ static int musb_otg_notifications(struct notifier_block *nb,
 		pm_runtime_get_sync(musb->controller);
 		ux500_restore_context(musb);
 		break;
+/**
+ *	- The Vbus information is sent by the Phy to the controller
+ *           through RxCMD.
+ *	- Vbus information sent through RxCMD has to be masked
+ *
+ *	- If bit[6:3]=8, system is in ACA-RID-A then
+ *		- In ULPI register, mask VBUSVLD by writing before setting
+ *	          the session bit of the MUSB
+ *			* Register ULPI Vbuscontrol (offset - 0x70)  = 0x2
+ *			* In Interface control register @0x08 = x60
+ *	                * In OTG control register @0x0B = x80
+ *		- On it_link_update (x0E2B bit7) notification
+ *			and link_status <> x8,
+ *	          SW must reset previous settings:
+ *			* Register ULPI Vbuscontrol (offset - 0x70)  = 0
+ *			* In Interface control register @0x09 = x60
+ *	                * In OTG control register @0x0C = x80
+ */
 	case USB_EVENT_RIDA:
 		busctl = musb_read_ulpi_buscontrol(musb->mregs);
 		busctl |= 0x02;
@@ -858,4 +876,3 @@ static void __exit ux500_exit(void)
 	platform_driver_unregister(&ux500_driver);
 }
 module_exit(ux500_exit);
-

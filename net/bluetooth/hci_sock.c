@@ -451,6 +451,33 @@ static int hci_sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 	return err ? : copied;
 }
 
+static void hci_sock_check_process_qos(struct hci_dev *hdev, u16 ogf, u16 ocf,
+				       struct sk_buff *skb)
+{
+	__u8 res_credits = 0;
+	u16 handle;
+
+	if (ogf == 0x3f && ocf == 0x00D5 /* VS QoS */) {
+		u16 service_interval;
+
+		handle = get_unaligned_le16(skb->data + 3);
+		service_interval = get_unaligned_le16(skb->data + 5);
+		BT_DBG("handle %d, service interval %d ",
+			handle, service_interval);
+		res_credits = service_interval ? 1 : 0;
+
+	} else if (ogf == 0x02 && ocf == 0x0010 /* Spec QoS */) {
+		__u32 token_rate;
+
+		handle = get_unaligned_le16(skb->data + 3);
+		token_rate = get_unaligned_le32(skb->data + 8);
+		BT_DBG("handle %d, token_rate %d ", handle, token_rate);
+		res_credits = token_rate ? 1 : 0;
+	}
+
+	hci_conn_reserve_credit(hdev, handle, res_credits);
+}
+
 static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 			    struct msghdr *msg, size_t len)
 {
@@ -511,6 +538,8 @@ static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 		u16 opcode = get_unaligned_le16(skb->data);
 		u16 ogf = hci_opcode_ogf(opcode);
 		u16 ocf = hci_opcode_ocf(opcode);
+
+		hci_sock_check_process_qos(hdev, ogf, ocf, skb);
 
 		if (((ogf > HCI_SFLT_MAX_OGF) ||
 				!hci_test_bit(ocf & HCI_FLT_OCF_BITS, &hci_sec_filter.ocf_mask[ogf])) &&

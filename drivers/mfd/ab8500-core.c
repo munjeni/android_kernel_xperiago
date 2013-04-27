@@ -983,11 +983,6 @@ static struct mfd_cell __devinitdata abx500_common_devs[] = {
 	{
 		.name = "ab8500-denc",
 	},
-	{
-		.name = "abx500-temp",
-		.num_resources = ARRAY_SIZE(ab8500_temp_resources),
-		.resources = ab8500_temp_resources,
-	},
 };
 
 static struct mfd_cell __devinitdata ab8500_bm_devs[] = {
@@ -1026,6 +1021,11 @@ static struct mfd_cell __devinitdata ab8500_devs[] = {
 	},
 	{
 		.name = "ab8500-codec",
+	},
+	{
+		.name = "abx500-temp",
+		.num_resources = ARRAY_SIZE(ab8500_temp_resources),
+		.resources = ab8500_temp_resources,
 	},
 };
 

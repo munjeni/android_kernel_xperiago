@@ -464,6 +464,7 @@ int db8500_prcmu_request_clock(u8 clock, bool enable);
 int db8500_prcmu_set_display_clocks(void);
 int db8500_prcmu_disable_dsipll(void);
 int db8500_prcmu_enable_dsipll(void);
+u32 db8500_prcmu_get_vbat_after_deep_sleep(void);
 void db8500_prcmu_config_abb_event_readout(u32 abb_events);
 void db8500_prcmu_get_abb_event_buffer(void __iomem **buf);
 int db8500_prcmu_config_esram0_deep_sleep(u8 state);

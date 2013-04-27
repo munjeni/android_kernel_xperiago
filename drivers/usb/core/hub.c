@@ -1852,7 +1852,7 @@ out:
 		schedule_delayed_work(&udev->bus->hnp_polling,
 			msecs_to_jiffies(THOST_REQ_POLL));
 	}
-
+fail:
 	return err;
 }
 
@@ -3295,11 +3295,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 			le16_to_cpu(hub->descriptor->wHubCharacteristics);
 	struct usb_device *udev;
 	int status, i;
-#ifdef CONFIG_USB_OTG_20
-	struct usb_otg_descriptor       *desc = NULL;
-	int ret;
-	u16 idVendor;
-#endif
+
 	dev_dbg (hub_dev,
 		"port %d, status %04x, change %04x, %s\n",
 		port1, portstatus, portchange, portspeed(hub, portstatus));
@@ -3512,6 +3508,8 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 			dev_dbg(hub_dev, "%dmA power budget left\n", status);
 
 #ifdef CONFIG_USB_OTG_20
+		struct usb_otg_descriptor	*desc = NULL;
+		int ret;
 		/* descriptor may appear anywhere in config */
 		__usb_get_extra_descriptor(udev->rawdescriptors[0],
 				le16_to_cpu(udev->config[0].desc.wTotalLength),
@@ -3525,7 +3523,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 		if (ret < 0)
 			dev_dbg(hub_dev, "set feature error\n");
 
-		idVendor = le16_to_cpu(udev->descriptor.idVendor);
+		u16 idVendor = le16_to_cpu(udev->descriptor.idVendor);
 		if (idVendor == USB_OTG_TEST_MODE_VID) {
 			u16 wValue, typeReq, wIndex;
 			u32 set_feature = 0;

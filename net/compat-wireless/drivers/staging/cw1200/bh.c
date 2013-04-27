@@ -2,8 +2,6 @@
  * Device handling thread implementation for mac80211 ST-Ericsson CW1200 drivers
  *
  * Copyright (c) 2010, ST-Ericsson
- * Copyright (C) 2012 Sony Mobile Communications AB.
- *
  * Author: Dmitry Tarnyagin <dmitry.tarnyagin@stericsson.com>
  *
  * Based on:
@@ -168,9 +166,13 @@ static struct sk_buff *cw1200_get_skb(struct cw1200_common *priv, size_t len)
 				- 2  /* Piggyback */);
 		/* In AP mode RXed SKB can be looped back as a broadcast.
 		 * Here we reserve enough space for headers. */
-		skb_reserve(skb, WSM_TX_EXTRA_HEADROOM
+		if(skb)
+			skb_reserve(skb, WSM_TX_EXTRA_HEADROOM
 				+ 8 /* TKIP IV */
 				- WSM_RX_EXTRA_HEADROOM);
+		else
+			printk(KERN_ERR
+				"[BH] Failed to allocate skb in cw1200_get_skb.\n");
 	} else {
 		skb = priv->skb_cache;
 		priv->skb_cache = NULL;
@@ -449,16 +451,10 @@ rx:
 				break;
 
 #if defined(CONFIG_CW1200_WSM_DUMPS)
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-			if (priv->wsm_enable_wsm_dumps)
-				cw1200_binlog_put_data(priv, BINLOG_WSM_RX,
-					data, min(wsm_len, wsm_dump_max));
-#else /* CONFIG_CW1200_BINARY_LOGGING */
 			if (unlikely(priv->wsm_enable_wsm_dumps))
 				print_hex_dump_bytes("<-- ",
 					DUMP_PREFIX_NONE,
 					data, min(wsm_len, wsm_dump_max));
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
 #endif /* CONFIG_CW1200_WSM_DUMPS */
 
 			wsm_id  = __le32_to_cpu(wsm->id) & 0xFFF;
@@ -584,20 +580,12 @@ tx:
 				}
 
 #if defined(CONFIG_CW1200_WSM_DUMPS)
-#ifdef CONFIG_CW1200_BINARY_LOGGING
-				if (priv->wsm_enable_wsm_dumps)
-					cw1200_binlog_put_data(priv, BINLOG_WSM_TX,
-						data,
-						min(__le32_to_cpu(wsm->len),
-						 wsm_dump_max));
-#else /* CONFIG_CW1200_BINARY_LOGGING */
 				if (unlikely(priv->wsm_enable_wsm_dumps))
 					print_hex_dump_bytes("--> ",
 						DUMP_PREFIX_NONE,
 						data,
 						min(__le32_to_cpu(wsm->len),
 						 wsm_dump_max));
-#endif /* CONFIG_CW1200_BINARY_LOGGING */
 #endif /* CONFIG_CW1200_WSM_DUMPS */
 
 				wsm_txed(priv, data);

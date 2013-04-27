@@ -43,6 +43,7 @@ struct mcde_display_device {
 	enum mcde_fifo fifo;
 	bool first_update;
 	struct mutex display_lock;
+	struct mutex vsync_lock; /* mutex for mcde_dss_wait_for_vsync() */
 
 	bool enabled;
 	struct mcde_chnl_state *chnl_state;
@@ -98,6 +99,9 @@ struct mcde_display_device {
 		enum mcde_display_rotation rotation);
 	enum mcde_display_rotation (*get_rotation)(
 		struct mcde_display_device *dev);
+
+	int (*wait_for_vsync)(struct mcde_display_device *ddev,
+		s64 *timestamp);
 
 	int (*apply_config)(struct mcde_display_device *dev);
 	int (*update)(struct mcde_display_device *dev, bool tripple_buffer);

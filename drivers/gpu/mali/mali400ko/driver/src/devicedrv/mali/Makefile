@@ -21,6 +21,14 @@ ARCH ?= arm
 OSKOS=linux
 FILES_PREFIX=
 
+check_cc2 = \
+	$(shell if $(1) -S -o /dev/null -xc /dev/null > /dev/null 2>&1; \
+	then \
+		echo "$(2)"; \
+	else \
+		echo "$(3)"; \
+	fi ;)
+
 # This conditional makefile exports the global definition ARM_INTERNAL_BUILD. Customer releases will not include arm_internal.mak
 -include ../../../arm_internal.mak
 
@@ -51,8 +59,8 @@ endif
 KDIR-$(shell uname -m):=/lib/modules/$(shell uname -r)/build
 
 ifeq ($(ARCH), arm)
-	# when compiling for ARM we're cross compiling
-	export CROSS_COMPILE ?= arm-none-linux-gnueabi-
+# when compiling for ARM we're cross compiling
+export CROSS_COMPILE ?= $(call check_cc2, arm-linux-gnueabi-gcc, arm-linux-gnueabi-, arm-none-linux-gnueabi-)
 endif
 
 # look up KDIR based om CPU selection
@@ -70,8 +78,16 @@ $(warning Host CPU $(CPU))
 $(warning OS_MEMORY $(USING_OS_MEMORY))
 endif
 
+# Set up build config
+export CONFIG_MALI400=m
+
+ifeq ($(USING_GPU_UTILIZATION),1)
+export EXTRA_DEFINES += -DCONFIG_MALI400_GPU_UTILIZATION=1
+export CONFIG_MALI400_GPU_UTILIZATION := y
+endif
+
 all: $(UMP_SYMVERS_FILE)
-	$(MAKE) ARCH=$(ARCH) -C $(KDIR) M=$(CURDIR) CONFIG_GPU_MALI=m modules
+	$(MAKE) ARCH=$(ARCH) -C $(KDIR) M=$(CURDIR) CONFIG_MALI400=m modules
 	@rm $(FILES_PREFIX)__malidrv_build_info.c $(FILES_PREFIX)__malidrv_build_info.o
 
 clean:

@@ -112,6 +112,7 @@ struct bnep_ext_hdr {
 #define BNEPCONNDEL	_IOW('B', 201, int)
 #define BNEPGETCONNLIST	_IOR('B', 210, int)
 #define BNEPGETCONNINFO	_IOR('B', 211, int)
+#define BNEPEXTENSION	_IOW('B', 212, int)
 
 struct bnep_connadd_req {
 	int   sock;		/* Connected socket */
@@ -143,10 +144,17 @@ struct bnep_proto_filter {
 	__u16 end;
 };
 
+struct bnep_extension_req {
+	__u16 data_len;
+	__u8  dst[ETH_ALEN];
+	__u8  ext_data[0];
+};
+
 int bnep_add_connection(struct bnep_connadd_req *req, struct socket *sock);
 int bnep_del_connection(struct bnep_conndel_req *req);
 int bnep_get_connlist(struct bnep_connlist_req *req);
 int bnep_get_conninfo(struct bnep_conninfo *ci);
+int bnep_extension_req(u8 *dst, struct sk_buff *skb);
 
 /* BNEP sessions */
 struct bnep_session {

@@ -271,6 +271,12 @@ static inline enum mcde_display_rotation mcde_display_get_rotation_default(
 	return ddev->rotation;
 }
 
+static int mcde_display_wait_for_vsync_default(
+	struct mcde_display_device *ddev, s64 *timestamp)
+{
+	return mcde_chnl_wait_for_next_vsync(ddev->chnl_state, timestamp);
+}
+
 static int mcde_display_apply_config_default(struct mcde_display_device *ddev)
 {
 	int ret;
@@ -352,10 +358,12 @@ void mcde_display_init_device(struct mcde_display_device *ddev)
 	ddev->get_pixel_format = mcde_display_get_pixel_format_default;
 	ddev->set_rotation = mcde_display_set_rotation_default;
 	ddev->get_rotation = mcde_display_get_rotation_default;
+	ddev->wait_for_vsync = mcde_display_wait_for_vsync_default;
 	ddev->apply_config = mcde_display_apply_config_default;
 	ddev->update = mcde_display_update_default;
 	ddev->on_first_update = mcde_display_on_first_update_default;
 	ddev->secure_output = mcde_display_secure_output_default;
 
 	mutex_init(&ddev->display_lock);
+	mutex_init(&ddev->vsync_lock);
 }

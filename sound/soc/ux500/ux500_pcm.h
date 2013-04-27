@@ -16,6 +16,7 @@
 
 #include <asm/page.h>
 #include <linux/workqueue.h>
+#include <linux/mutex.h>
 
 #define UX500_PLATFORM_MIN_RATE_PLAYBACK 8000
 #define UX500_PLATFORM_MAX_RATE_PLAYBACK 48000
@@ -40,6 +41,7 @@ struct ux500_pcm_private {
 	int msp_id;
 	int stream_id;
 	unsigned int offset;
+	struct mutex pipeLock;
 };
 
 struct ux500_pcm_dma_params {

@@ -410,7 +410,7 @@ static void ab8500_rtc_sync_work(struct work_struct *work)
 	 * when the drift is less than a second.
 	 * If diff is more then 60s then system time is considered changed
 	 * but not the rtc time and they should be kept different.
-	 * */
+	 */
 	if ((abs(ts.tv_sec - sys_ts.tv_sec) < 60) &&
 		(ts.tv_sec != sys_ts.tv_sec) && !resumed) {
 		adjust.offset = (ts.tv_sec - sys_ts.tv_sec) * 1000000;

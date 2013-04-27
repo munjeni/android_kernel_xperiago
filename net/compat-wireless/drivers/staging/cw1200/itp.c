@@ -203,6 +203,7 @@ int cw1200_itp_init(struct cw1200_common *priv)
 	itp->data = NULL;
 	itp->hdr_len = WSM_TX_EXTRA_HEADROOM +
 			sizeof(struct ieee80211_hdr_3addr);
+	itp->id = 0;
 
 	if (!debugfs_create_file("itp", S_IRUSR | S_IWUSR,
 			priv->debug->debugfs_phy, priv, &fops_itp))
@@ -370,9 +371,9 @@ static void cw1200_itp_tx_start(struct cw1200_common *priv)
 	tx->queueId = 3;
 	tx->more = 0;
 	tx->flags = 0xc;
-	tx->packetID = 0x55ff55;
+	tx->packetID = 0;
 	tx->reserved = 0;
-	tx->expireTime = 1;
+	tx->expireTime = 0;
 
 	if (itp->preamble == ITP_PREAMBLE_GREENFIELD)
 		tx->htTxParameters = WSM_HT_TX_GREENFIELD;
@@ -503,6 +504,7 @@ int cw1200_itp_get_tx(struct cw1200_common *priv, u8 **data,
 		size_t *tx_len, int *burst)
 {
 	struct cw1200_itp *itp;
+	struct wsm_tx *tx;
 	struct timespec now;
 	int time_left_us;
 
@@ -562,6 +564,9 @@ int cw1200_itp_get_tx(struct cw1200_common *priv, u8 **data,
 	if (itp->data_mode == ITP_DATA_RANDOM)
 		cw1200_itp_fill_pattern(&itp->data[itp->hdr_len],
 				itp->data_len, itp->data_mode);
+
+	tx = (struct wsm_tx *)itp->data;
+	tx->packetID = __cpu_to_le32(itp->id++);
 	*burst = 2;
 	atomic_set(&priv->bh_tx, 1);
 	ktime_get_ts(&itp->last_sent);

@@ -91,6 +91,7 @@ struct cw1200_itp {
 	u8			*data;
 	int			hdr_len;
 	int			data_len;
+	int			id;
 };
 
 int cw1200_itp_init(struct cw1200_common *priv);
