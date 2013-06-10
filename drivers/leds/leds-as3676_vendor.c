@@ -208,7 +208,7 @@ struct as3676_als_group {
 };
 
 #define AS3676_ATTR(_name)  \
-	__ATTR(_name, 0664, as3676_##_name##_show, as3676_##_name##_store)
+	__ATTR(_name, 0666, as3676_##_name##_show, as3676_##_name##_store)
 
 #define AS3676_DEV_ATTR(_name)  \
 	struct device_attribute as3676_##_name = AS3676_ATTR(_name);
@@ -2286,6 +2286,22 @@ static ssize_t as3676_audio_color_store(struct device *dev,
 	return strnlen(buf, PAGE_SIZE);
 }
 
+static ssize_t as3676_als_lx_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+		snprintf(buf, PAGE_SIZE,
+				"-1 lx (amb_result=n/a,"
+				"offset=n/a,amb_gain=n/a,adc=10\n");
+		return strnlen(buf, PAGE_SIZE);
+}
+
+static ssize_t as3676_als_lx_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t size)
+{
+	return -EINVAL;
+}
+
 static struct device_attribute as3676_attributes[] = {
 	AS3676_ATTR(debug),
 	AS3676_ATTR(dim_start),
@@ -2306,6 +2322,7 @@ static struct device_attribute as3676_attributes[] = {
 	AS3676_ATTR(als_on),
 	AS3676_ATTR(audio_on),
 	AS3676_ATTR(audio_color),
+	AS3676_ATTR(als_lx),
 	__ATTR_NULL
 };
 
