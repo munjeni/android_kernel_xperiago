@@ -25,6 +25,7 @@ struct reboot_reason reboot_reasons_sw[] = {
 	{"forced-crash", SW_RESET_FORCED},
 	{"", SW_RESET_NORMAL},  /* Normal Boot */
 	{"bootloader", SW_RESET_BOOTLOADER},
+	{"fastboot", SW_RESET_BOOTLOADER}, /* xparia go have no bootloader ui, so give fastboot option in reboot menu */
 	{"eraseflash", SW_RESET_ERASEFLASH},
 };
 

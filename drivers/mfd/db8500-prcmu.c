@@ -2125,7 +2125,7 @@ int prcmu_abb_write_masked(u8 slave, u8 reg, u8 *value, u8 *mask, u8 size)
 
 	if (!wait_for_completion_timeout(&mb5_transfer.work,
 				PRCMU_COMM_TOUT)) {
-		pr_err("prcmu: %s timed out (%s ms) waiting for a reply.\n",
+		pr_err("prcmu: %s timed out (%d ms) waiting for a reply.\n",
 			__func__, PRCMU_COMM_TOUT_MS);
 		r = -EIO;
 		db8500_prcmu_debug_dump(__func__, true, false);
