@@ -1,5 +1,6 @@
 /*
  * Copyright (C) ST-Ericsson SA 2011
+ * Modified 2013 Sony Mobile Communications AB.
  *
  * License Terms: GNU General Public License v2
  *
@@ -101,12 +102,15 @@ static ssize_t ux500_wdt_write(struct file *file, const char __user *data,
 
 	ux500_wdt_ops->kick(wdog_id);
 
+	pr_info("ux500_wdt: hwwd - kick\n");
+
 	return len;
 }
 
 static long ux500_wdt_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
+
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
 	int interval;
@@ -151,7 +155,11 @@ static long ux500_wdt_ioctl(struct file *file, unsigned int cmd,
 		return ret;
 	}
 	case WDIOC_KEEPALIVE:
-		return ux500_wdt_ops->kick(wdog_id);
+	{
+		int ret = ux500_wdt_ops->kick(wdog_id);
+		pr_info("ux500_wdt: hwwd - keepalive\n");
+		return ret;
+	}
 
 	case WDIOC_SETTIMEOUT:
 		if (get_user(interval, p))
@@ -404,6 +412,8 @@ static int __exit ux500_wdt_remove(struct platform_device *dev)
 static int ux500_wdt_suspend(struct platform_device *pdev,
 			     pm_message_t state)
 {
+	pr_info("ux500_wdt: hwwd - suspend\n");
+
 	if (wdt_en && cpu_is_u5500()) {
 		ux500_wdt_ops->disable(wdog_id);
 		return 0;
@@ -421,6 +431,8 @@ static int ux500_wdt_suspend(struct platform_device *pdev,
 
 static int ux500_wdt_resume(struct platform_device *pdev)
 {
+	pr_info("ux500_wdt: hwwd - resume\n");
+
 	if (wdt_en && cpu_is_u5500()) {
 		ux500_wdt_ops->load(wdog_id, timeout * 1000);
 		ux500_wdt_ops->enable(wdog_id);

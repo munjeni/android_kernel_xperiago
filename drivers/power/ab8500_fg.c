@@ -902,17 +902,21 @@ static void ab8500_fg_acc_cur_work(struct work_struct *work)
 			dev_info(di->dev, "Stopping missed accu logic\n");
 		}
 	} else {
-		/*
-		 * Convert to unit value in mA
-		 * Full scale input voltage is
-		 * 66.660mV => LSB = 66.660mV/(4096*res) = 1.627mA
-		 * Given a 250ms conversion cycle time the LSB corresponds
-		 * to 112.9 nAh. Convert to current by dividing
-		 * by the conversion time in hours (= samples / (3600 * 4)h)
-		 * 112.9nAh assumes 10mOhm, but fg_res is in 0.1mOhm
-		 */
-		di->avg_curr = (di->accu_charge * 36) /
-			((di->fg_samples / 4) * 10);
+		if (di->fg_samples) {
+			/*
+			* Convert to unit value in mA
+			* Full scale input voltage is
+			* 66.660mV => LSB = 66.660mV/(4096*res) = 1.627mA
+			* Given a 250ms conversion cycle time the LSB corresponds
+			* to 112.9 nAh. Convert to current by dividing
+			* by the conversion time in hours (= samples / (3600 * 4)h)
+			* 112.9nAh assumes 10mOhm, but fg_res is in 0.1mOhm
+			*/
+			di->avg_curr = (di->accu_charge * 36 * 4) /
+				(di->fg_samples * 10);
+		} else
+			dev_err(di->dev,
+				"samples is zero, using previous calculated average current\n");
 
 		di->flags.conv_done = true;
 		queue_work(di->fg_wq, &di->fg_work);

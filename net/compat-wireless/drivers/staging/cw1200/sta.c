@@ -1458,6 +1458,7 @@ void cw1200_join_work(struct work_struct *work)
 	if (cw1200_queue_get_skb(queue, priv->pending_frame_id,
 			&skb, &txpriv)) {
 		wsm_unlock_tx(priv);
+		priv->join_pending = false;
 		return;
 	}
 
@@ -1466,7 +1467,6 @@ void cw1200_join_work(struct work_struct *work)
 				"previous request yet to be completed\n");
 		cw1200_queue_remove(queue, priv->pending_frame_id);
 		wsm_unlock_tx(priv);
-		priv->join_pending = false;
 		return;
 	}
 
