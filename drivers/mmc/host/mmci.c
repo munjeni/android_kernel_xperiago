@@ -186,8 +186,8 @@ static void dump_mmci_regs(struct mmc_host *mmc)
 
 	struct mmci_host *host = mmc_priv(mmc);
 
-	dev_info(mmc_dev(mmc), "[MMC]base value = %0x08u\n", host->base);
-	if (host->base == NULL || host->phybase == NULL)
+	dev_info(mmc_dev(mmc), "[MMC]base value = %0x08u\n", (unsigned int)host->base);
+	if (!host->base || !host->phybase)
 		return ;
 
 	pwr = readl(host->base + MMCIPOWER);
