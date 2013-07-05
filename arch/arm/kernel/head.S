@@ -357,8 +357,8 @@ __enable_mmu:
  * alignment_init() is called.
  * http://git.kernel.org/?p=linux/kernel/git/torvalds/linux.git;a=commit;h=8428e84d42179c2a00f5f6450866e70d802d1d05
  */
-//#if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
-#ifdef CONFIG_ALIGNMENT_TRAP
+#if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
+//#ifdef CONFIG_ALIGNMENT_TRAP
 	orr	r0, r0, #CR_A
 #else
 	bic	r0, r0, #CR_A
