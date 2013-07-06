@@ -40,7 +40,6 @@
 #include <linux/notifier.h>
 #include <linux/ktime.h>
 #include <linux/spinlock.h>
-#include <linux/delay.h>
 
 static uint32_t lowmem_debug_level = 2;
 static int lowmem_adj[6] = {
@@ -223,8 +222,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		lastpid = selected->pid;
 		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		rem -= selected_tasksize;
-		/* give the system time to free up the memory */
-		msleep_interruptible(20);
 	}
 	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
 		     sc->nr_to_scan, sc->gfp_mask, rem);
