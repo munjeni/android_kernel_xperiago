@@ -25,24 +25,24 @@ static struct cpufreq_frequency_table db8500_freq_table[] = {
 		.frequency = 400000,
 	},
 	[2] = {
-		.index = 1,
+		.index = 2,
 		.frequency = 600000,
 	},
 	[3] = {
-		.index = 2,
+		.index = 3,
 		.frequency = 800000,
 	},
 	[4] = {
-		.index = 3,
+		.index = 4,
 		.frequency = 1000000,
 	},
 	[5] = {
 		/* Used for MAX_OPP, if available */
-		.index = 4,
+		.index = 5,
 		.frequency = CPUFREQ_TABLE_END,
 	},
 	[6] = {
-		.index = 5,
+		.index = 6,
 		.frequency = CPUFREQ_TABLE_END,
 	},
 };
