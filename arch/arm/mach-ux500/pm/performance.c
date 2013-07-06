@@ -178,7 +178,7 @@ static void mmc_load(struct work_struct *work)
 	if (!old_mode && new_mode)
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					     "mmc",
-					     1150000);
+					     1000000);
 
 	if (old_mode && !new_mode)
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
