@@ -1425,6 +1425,7 @@ static int set_channel_state_sync(struct mcde_chnl_state *chnl,
 		ret = wait_event_timeout(chnl->state_waitq,
 			/* STOPPED -> IDLE is manual, so wait for both */
 			chnl->state == CHNLSTATE_STOPPED || chnl->state == CHNLSTATE_RUNNING ||
+			chnl->state == CHNLSTATE_DSI_WRITE ||
 			chnl->state == CHNLSTATE_IDLE,
 						msecs_to_jiffies(CHNL_TIMEOUT));
 		if (WARN_ON_ONCE(!ret)) {
