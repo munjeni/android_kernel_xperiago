@@ -6,9 +6,12 @@
  * License terms: GNU General Public License (GPL) version 2
  *
  * This is a module test for clocks and regulators.
+ *
+ * Modified by Munjeni @ XDA Developers 2013
  */
 
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/seq_file.h>
@@ -877,6 +880,8 @@ static int __init pwr_test_init(void)
 	int err = 0;
 	void *err_ptr;
 
+	printk ("Loaded pwr test module.\n");
+
 	debugfs_dir = debugfs_create_dir("pwr_test", NULL);
 	if (IS_ERR(debugfs_dir))
 		return PTR_ERR(debugfs_dir);
@@ -901,9 +906,20 @@ static int __init pwr_test_init(void)
 
 	return 0;
 out:
+	printk ("pwr test error!\n");
 	debugfs_remove_recursive(debugfs_dir);
 	return err;
 }
-late_initcall(pwr_test_init);
+
+static void __exit pwr_test_exit(void)
+{
+	printk ("Unloaded pwr test module.\n");
+	debugfs_remove_recursive(debugfs_dir);
+
+	return;
+}
+
+module_init(pwr_test_init);
+module_exit(pwr_test_exit);
 
 MODULE_LICENSE("GPL v2");
