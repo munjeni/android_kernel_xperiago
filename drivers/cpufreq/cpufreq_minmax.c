@@ -35,8 +35,10 @@
 #include <linux/percpu.h>
 #include <linux/mutex.h>
 
-#define CONFIG_CPU_FREQ_SAMPLING_LATENCY_MULTIPLIER 100
-#define CONFIG_CPU_FREQ_MIN_TICKS 1
+// additional params
+#define CPU_FREQ_SAMPLING_LATENCY_MULTIPLIER	(1000)
+#define CPU_FREQ_MIN_TICKS			(10)
+
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
@@ -60,7 +62,7 @@ static unsigned int def_sampling_rate;
 #define MIN_SAMPLING_RATE_RATIO			(2)
 /* for correct statistics, we need at least 10 ticks between each measure */
 #define MIN_STAT_SAMPLING_RATE			\
-	(MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(CONFIG_CPU_FREQ_MIN_TICKS))
+	(MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(CPU_FREQ_MIN_TICKS))
 #define MIN_SAMPLING_RATE			\
 			(def_sampling_rate / MIN_SAMPLING_RATE_RATIO)
 #define MAX_SAMPLING_RATE			(500 * def_sampling_rate)
@@ -304,7 +306,7 @@ static struct attribute * dbs_attributes[] = {
 
 static struct attribute_group dbs_attr_group = {
 	.attrs = dbs_attributes,
-	.name = "Minmax",
+	.name = "minmax",
 };
 
 /************************** sysfs end ************************/
@@ -487,7 +489,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				latency = 1;
 
 			def_sampling_rate = 10 * latency *
-				CONFIG_CPU_FREQ_SAMPLING_LATENCY_MULTIPLIER;
+				CPU_FREQ_SAMPLING_LATENCY_MULTIPLIER;
 
 			if (def_sampling_rate < MIN_STAT_SAMPLING_RATE)
 				def_sampling_rate = MIN_STAT_SAMPLING_RATE;
