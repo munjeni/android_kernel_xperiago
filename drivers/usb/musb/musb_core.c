@@ -1887,7 +1887,7 @@ musb_srp_store(struct device *dev, struct device_attribute *attr,
 	struct musb	*musb = dev_to_musb(dev);
 	unsigned short	srp;
 #ifdef CONFIG_USB_OTG_20
-	musb->xceiv->start_srp(musb->xceiv);
+	musb->xceiv->start_srp(musb->xceiv, 0);
 #endif
 	if (sscanf(buf, "%hu", &srp) != 1
 			|| (srp != 1)) {

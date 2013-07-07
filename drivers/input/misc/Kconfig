@@ -643,13 +643,6 @@ config INPUT_APDS9702
           If you say yes here you get support for the APDS9702 chip.
           This is used as a proximity sensor.
 
-config INPUT_LPS331AP
-        bool "LPS331AP pressure sensor driver"
-        depends on I2C
-        default n
-        help
-          If you say yes here you get support LPS331AP pressure sensor.
-
 config INPUT_SO340010_TOUCH_KEY
         tristate "SO340010-16qnf configurable capacitive sensing IC driver"
         depends on I2C

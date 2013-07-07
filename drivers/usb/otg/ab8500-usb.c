@@ -413,10 +413,14 @@ static int ab8505_usb_link_status_update(struct ab8500_usb *ab,
 static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 				enum ab8500_usb_link_status lsts) {
 	enum usb_xceiv_events event = 0;
+	static int wtflsts = 0;
 
 	dev_dbg(ab->dev, "ab8500_usb_link_status_update %d\n", lsts);
-	if (((ab->RIDA) && (lsts == 1)) || ((ab->RIDA) && (lsts == 2)))
-		return;
+	if (lsts) {
+		wtflsts = (int)lsts;
+		if (((ab->RIDA) && (lsts == 1)) || ((ab->RIDA) && (lsts == 2)))
+			return wtflsts;
+	}
 	switch (lsts) {
 	case USB_LINK_ACA_RID_B_8500:
 		event = USB_EVENT_RIDB;
@@ -509,9 +513,11 @@ static int ab8500_usb_link_status_update(struct ab8500_usb *ab,
 					event,
 					&ab->vbus_draw);
 		break;
+	case USB_LINK_RESERVED_8500:
+		break;
 	}
 	ab->prevous_link_status_state = lsts;
-	return 0;
+	return wtflsts;
 }
 
 static int abx500_usb_link_status_update(struct ab8500_usb *ab)

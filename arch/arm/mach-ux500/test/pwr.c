@@ -905,3 +905,5 @@ out:
 	return err;
 }
 late_initcall(pwr_test_init);
+
+MODULE_LICENSE("GPL v2");

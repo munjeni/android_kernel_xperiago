@@ -7,9 +7,7 @@ obj-y				:= clock.o cpu.o devices.o dcache.o \
 				   usb.o reboot_reasons.o timer.o \
 				   uart-db8500.o clock-debug.o \
 				   irq-trigger.o
-obj-y				+= pm/
-
-obj-$(CONFIG_DB8500_PWR_TEST) += test/
+obj-y				+= pm/ test/
 
 
 
