@@ -1482,6 +1482,7 @@ int ab8500_regulator_debug_read(enum ab8500_regulator_id id,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(ab8500_regulator_debug_read);
 
 static int ab8500_regulator_status_print(struct seq_file *s, void *p)
 {

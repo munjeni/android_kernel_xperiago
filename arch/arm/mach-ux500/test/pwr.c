@@ -25,8 +25,8 @@
 #include <mach/pm.h>
 
 #include "../pm/suspend_dbg.h"
-#include "../../../drivers/regulator/dbx500-prcmu.h"
-#include "../../../drivers/regulator/ab8500-debug.h"
+#include "../../../../drivers/regulator/dbx500-prcmu.h"
+#include "../../../../drivers/regulator/ab8500-debug.h"
 
 /* To reach main_wake_lock */
 #include "../../../../kernel/power/power.h"
@@ -791,7 +791,9 @@ static ssize_t pm_test_suspend_set(struct file *file,
 {
 	long unsigned val;
 	int err;
-
+#ifdef CONFIG_WAKELOCK
+	struct wake_lock main_wake_lock;
+#endif
 	err = kstrtoul_from_user(user_buf, count, 0, &val);
 
 	if (err)

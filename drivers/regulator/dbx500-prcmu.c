@@ -70,6 +70,7 @@ int power_state_active_is_enabled(void)
 {
 	return (power_state_active_cnt > 0);
 }
+EXPORT_SYMBOL(power_state_active_is_enabled);
 
 struct ux500_regulator {
 	char *name;

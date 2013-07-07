@@ -637,6 +637,7 @@ u32 db8500_prcmu_read(unsigned int reg)
 {
 	return readl(_PRCMU_BASE + reg);
 }
+EXPORT_SYMBOL(db8500_prcmu_read);
 
 void db8500_prcmu_write(unsigned int reg, u32 value)
 {

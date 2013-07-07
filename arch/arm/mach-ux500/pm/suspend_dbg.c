@@ -141,6 +141,7 @@ void ux500_suspend_dbg_test_start(int num)
 	suspend_test_current = deepsleeps_done;
 	suspend_test_fail_count = 0;
 }
+EXPORT_SYMBOL(ux500_suspend_dbg_test_start);
 
 bool ux500_suspend_test_success(bool *ongoing)
 {
@@ -148,6 +149,7 @@ bool ux500_suspend_test_success(bool *ongoing)
 		      (suspend_test_count > 0));
 	return suspend_test_fail_count < TEST_FAILS;
 }
+EXPORT_SYMBOL(ux500_suspend_test_success);
 
 void ux500_suspend_dbg_end(void)
 {
