@@ -79,3 +79,5 @@ obj-$(CONFIG_U8500_FLASH)	+= camera_flash/
 obj-$(CONFIG_U8500_CM)		+= nmf-cm/
 obj-$(CONFIG_AB5500_SIM)	+= ab5500_sim/
 obj-$(CONFIG_SENSORS_TSL2772)	+= taos/
+obj-$(CONFIG_SNAPPY_COMPRESS)   += snappy/
+obj-$(CONFIG_SNAPPY_DECOMPRESS) += snappy/

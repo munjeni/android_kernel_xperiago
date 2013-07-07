@@ -186,4 +186,6 @@ source "drivers/staging/pasr/Kconfig"
 
 source "drivers/staging/taos/Kconfig"
 
+source "drivers/staging/snappy/Kconfig"
+
 endif # STAGING
