@@ -132,20 +132,21 @@ config CPU_FREQ_DEFAULT_GOV_LULZACTIVEQ
 
 config CPU_FREQ_DEFAULT_GOV_DYNAMIC_INTERACTIVE
 	bool "dynamic interactive"
-	--help--
+	select CPU_FREQ_GOV_DYNAMIC_INTERACTIVE
+	help
 	  Use the CPUFreq governor 'DYNAMIC_INTERACTIVE' as default.
 
 config CPU_FREQ_DEFAULT_GOV_INTELLIDEMAND
 	bool "intellidemand"
 	select CPU_FREQ_GOV_INTELLIDEMAND
 	select CPU_FREQ_GOV_PERFORMANCE
-	--help--
+	help
 	  Intelligent OnDemand Govneror based on Samsung Patched OnDemand
 
 config CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
 	bool "interactiveX"
 	select CPU_FREQ_GOV_INTERACTIVEX
-	--help--
+	help
 	  Use the CPUFreq governor 'interactiveX' as default. This allows
 	  you to get a full dynamic cpu frequency capable system by simply
 	  loading your cpufreq low-level hardware driver, using the
@@ -154,7 +155,7 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
 config CPU_FREQ_DEFAULT_GOV_LIONHEART
 	bool "lionheart"
 	select CPU_FREQ_GOV_LIONHEART
-	--help--
+	help
 	  If in doubt, say N.
 
 config CPU_FREQ_DEFAULT_GOV_NIGHTMARE
@@ -165,7 +166,7 @@ config CPU_FREQ_DEFAULT_GOV_SAKURACTIVE
 	bool "sakuractive"
 	select CPU_FREQ_GOV_SAKURACTIVE
 	select CPU_FREQ_GOV_PERFORMANCE
-	--help--
+	help
 	  Use the CPUFreq governor 'sakuractive' as default. This allows you
 	  to get a full dynamic frequency capable system with CPU
 	  hotplug support by simply loading your cpufreq low-level
@@ -178,7 +179,7 @@ config CPU_FREQ_DEFAULT_GOV_WHEATLEY
 	bool "wheatley"
 	select CPU_FREQ_GOV_WHEATLEY
 	select CPU_FREQ_GOV_PERFORMANCE
-	--help--
+	help
 	  Use the CPUFreq governor 'wheatley' as default.
 
 endchoice
