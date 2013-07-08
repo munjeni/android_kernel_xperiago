@@ -9,6 +9,8 @@
  * License terms: GNU General Public License (GPL), version 2.
  */
 
+//#define DEBUG
+
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
@@ -1422,6 +1424,16 @@ static int set_channel_state_sync(struct mcde_chnl_state *chnl,
 
 	/* Wait for IDLE before changing state */
 	if (chnl_state != CHNLSTATE_IDLE) {
+		/* -------------------
+		 * FIXME:
+		 * munjeni @ XDA 2013 - channel never reach CHNLSTATE_IDLE here!
+		 * This is temporary fix!
+		 */
+		if (chnl_state == CHNLSTATE_DSI_WRITE || chnl_state == CHNLSTATE_RUNNING) {
+			printk("mcde mcde: Channel state change newer reach idle state!!!\n");
+			return 0;
+		}
+		/* ------------------- */
 		ret = wait_event_timeout(chnl->state_waitq,
 			/* STOPPED -> IDLE is manual, so wait for both */
 			chnl->state == CHNLSTATE_STOPPED ||
