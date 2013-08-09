@@ -439,6 +439,7 @@ static DEFINE_SPINLOCK(clkout_lock);
 
 /* Global var to runtime determine TCDM base for v2 or v1 */
 static __iomem void *tcdm_base;
+__iomem void *tcdm_base_bkp;
 
 struct clk_mgt {
 	void __iomem *reg;
@@ -2654,6 +2655,7 @@ void __init db8500_prcmu_early_init(void)
 	}
 
 	tcdm_base = __io_address(U8500_PRCMU_TCDM_BASE);
+	tcdm_base_bkp = __io_address(U8500_PRCMU_TCDM_BASE);
 
 	spin_lock_init(&mb0_transfer.lock);
 	spin_lock_init(&mb0_transfer.dbb_irqs_lock);

@@ -28,6 +28,10 @@
 
 #include "clock.h"
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/kexec.h>
+#endif
+
 void __iomem *_PRCMU_BASE;
 
 #ifdef CONFIG_CACHE_L2X0
@@ -79,6 +83,15 @@ static void ux500_restart(char mode, const char *cmd)
 		mdelay(2000);
 
 	printk(KERN_ERR "Reboot via PRCMU failed -- System halted\n");
+	while (1)
+		;
+}
+
+void kexec_hardboot_hook(void)
+{
+	prcmu_system_reset(0x5501);
+	mdelay(1000);
+
 	while (1)
 		;
 }

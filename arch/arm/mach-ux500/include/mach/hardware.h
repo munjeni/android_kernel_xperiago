@@ -74,6 +74,7 @@
 
 #include <mach/id.h>
 extern void __iomem *_PRCMU_BASE;
+extern void __iomem *tcdm_base_bkp;
 
 #define ARRAY_AND_SIZE(x)	(x), ARRAY_SIZE(x)
 
