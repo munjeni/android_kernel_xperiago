@@ -57,10 +57,6 @@ static inline void crash_setup_regs(struct pt_regs *newregs,
 /* Function pointer to optional machine-specific reinitialization */
 extern void (*kexec_reinit)(void);
 
-#ifdef CONFIG_KEXEC_HARDBOOT
-extern void kexec_hardboot_hook(void);
-#endif
-
 #endif /* __ASSEMBLY__ */
 
 #endif /* CONFIG_KEXEC */

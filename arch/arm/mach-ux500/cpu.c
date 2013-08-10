@@ -87,15 +87,6 @@ static void ux500_restart(char mode, const char *cmd)
 		;
 }
 
-void kexec_hardboot_hook(void)
-{
-	prcmu_system_reset(0x5501);
-	mdelay(1000);
-
-	while (1)
-		;
-}
-
 static int ux500_gic_irq_set_wake(struct irq_data *d, unsigned int on)
 {
 	return 0;

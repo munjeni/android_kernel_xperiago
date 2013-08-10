@@ -24,7 +24,6 @@ extern unsigned long kexec_mach_type;
 extern unsigned long kexec_boot_atags;
 #ifdef CONFIG_KEXEC_HARDBOOT
 extern unsigned long kexec_hardboot;
-extern void kexec_hardboot_hook(void);
 #endif
 
 static atomic_t waiting_for_crash_ipi;
@@ -124,13 +123,6 @@ void machine_kexec(struct kimage *image)
 	local_irq_disable();
 	local_fiq_disable();
 	setup_mm_for_reboot(0); /* mode is not used, so just pass 0*/
-
-/* Munjeni: kexec not working by now using kexec_hardboot_hook function! */
-//#ifdef CONFIG_KEXEC_HARDBOOT
-//	/* Run any final machine-specific shutdown code. */
-//	if (image->hardboot)
-//		kexec_hardboot_hook();
-//#endif
 
 	flush_cache_all();
 	outer_flush_all();
