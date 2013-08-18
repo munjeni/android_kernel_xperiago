@@ -16,7 +16,7 @@
 #define BUS_OFFSET	UL(0x00000000)
 
 #if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER)
-#define END_MEM		            UL(0x1FE00000)
+#define END_MEM		            UL(0x1FDFFFFF)
 #endif
 
 #if defined(CONFIG_KEXEC_HARDBOOT)
