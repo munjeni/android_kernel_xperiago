@@ -88,69 +88,15 @@ hardboot:
 
 /*
  * Munjeni @ XDA 2013:
- * Our reboot function is based on db8500-prcmu.c and cpu.c
- * Used db8500_prcmu_system_reset function with combination with ux500_restart function.
- * Created new reboot function based on these two by this way:
- *
- * void reboot(u16 reset_code)
- * {
- * 	//0x5501 is SW_RESET_NORMAL reset reason
- * 	local_irq_disable();
- * 	local_fiq_disable();
- * 	writew(0x5501, (tcdm_base + PRCM_SW_RST_REASON));
- * 	writel(1, PRCM_APE_SOFTRST);
- * 	mdelay(1000);
- *
- * 	while (1)
- * 		;
- * }
- *
- * Hope thats ok???
+ * Soft reboot function for Xperia Go and Sola
  */
 #if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER)
-	MOV	R12, SP
-	STMFD	SP!, {R4,R5,R11,R12,LR,PC}
-	SUB	R11, R12, #4
-	STMFD	SP!, {LR}
+	ldr r0,soft_reset_addr
+	mov r1, #1
+	str r1, [r0]
 
-loc_5124:
-	BL	__gnu_mcount_nc
-	CPSID	I
-	CPSID	F
-	LDR	R4, =outer_cache
-	LDR	R3, [R4,#0x18]
-	CMP	R3, #0
-	BEQ	loc_5148
-	BLX	R3
-
-loc_5148:
-	LDR	R3, =tcdm_base_bkp
-	MOVW	R2, #0x5501
-	LDR	R3, [R3]
-	ADD	R3, R3, #0xFF0
-	STRH	R2, [R3,#8]
-	LDR	R3, [R4,#0x18]
-	CMP	R3, #0
-	BEQ	loc_5170
-	BLX	R3
-
-loc_5170:
-	LDR	R3, =_PRCMU_BASE
-	MOVW	R4, #0x3E7
-	MOV	R2, #1
-	LDR	R3, [R3]
-	STR	R2, [R3,#0x228]
-
-loc_5184:
-	MOVW	R0, #0x65B0
-	SUB	R4, R4, #1
-	MOVT	R0, #0x666
-	BL	__const_udelay
-	CMN	R4, #1
-	BNE	loc_5184
-
-loc_519C:
-	B	loc_519C
+soft_reset_addr:
+	.word 0x80157228
 #else
 #error "No reboot method defined for hardboot."
 #endif
