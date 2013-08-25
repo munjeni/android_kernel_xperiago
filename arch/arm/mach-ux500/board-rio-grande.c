@@ -149,6 +149,11 @@
 #define CRASH_LOGS_START 0x1FF00000
 #define CRASH_LOGS_SIZE SZ_1M
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#define KEXEC_HARDBOOT_START   0x1FE00000
+#define KEXEC_HARDBOOT_SIZE    (SZ_1M)
+#endif
+
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 #define RAMDUMP_CRASH_LOGS_SIZE  (128 * SZ_1K)
 #define RAMDUMP_CRASH_LOGS_START (CRASH_LOGS_START)
@@ -1994,6 +1999,22 @@ static struct platform_device ste_ff_vibra_device = {
 	.name = "ste_ff_vibra"
 };
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+static struct resource kexec_hardboot_resources[] = {
+	[0] = {
+		.start  = KEXEC_HARDBOOT_START,
+		.end    = KEXEC_HARDBOOT_START +
+			KEXEC_HARDBOOT_SIZE - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device kexec_hardboot_device = {
+	.name           = "kexec_hardboot",
+	.id             = -1,
+};
+#endif
+
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 static struct resource ramdump_crash_logs_resources[] = {
 	[0] = {
@@ -2023,6 +2044,23 @@ static struct platform_device ram_console_device = {
 	.name           = "ram_console",
 	.id             = -1,
 };
+#endif
+
+#if defined(CONFIG_KEXEC_HARDBOOT)
+static void kexec_hardboot_reserve(void)
+{
+	if (memblock_reserve(KEXEC_HARDBOOT_START, KEXEC_HARDBOOT_SIZE)) {
+		printk(KERN_ERR "Failed to reserve memory for KEXEC_HARDBOOT: "
+		       "%dM@0x%.8X\n",
+		       KEXEC_HARDBOOT_SIZE / SZ_1M, KEXEC_HARDBOOT_START);
+		return;
+	}
+	memblock_free(KEXEC_HARDBOOT_START, KEXEC_HARDBOOT_SIZE);
+	memblock_remove(KEXEC_HARDBOOT_START, KEXEC_HARDBOOT_SIZE);
+
+	kexec_hardboot_device.num_resources  = ARRAY_SIZE(kexec_hardboot_resources);
+	kexec_hardboot_device.resource       = kexec_hardboot_resources;
+}
 #endif
 
 #if defined(CONFIG_RAMDUMP_CRASH_LOGS) || defined(CONFIG_ANDROID_RAM_CONSOLE)
@@ -2187,6 +2225,9 @@ static struct platform_device *mop500_platform_devs[] __initdata = {
 #endif
 #ifdef CONFIG_MODEM_U8500
 	&u8500_modem_dev,
+#endif
+#ifdef CONFIG_KEXEC_HARDBOOT
+	&kexec_hardboot_device,
 #endif
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 	&ramdump_crash_logs_device,
@@ -2456,6 +2497,9 @@ static void __init mop500_init_machine(void)
 /* Function to reserve memory regions for specific use */
 static void __init riogrande_reserve(void)
 {
+#if defined(CONFIG_KEXEC_HARDBOOT)
+	kexec_hardboot_reserve();
+#endif
 #if defined(CONFIG_RAMDUMP_CRASH_LOGS) || defined(CONFIG_ANDROID_RAM_CONSOLE)
 	crash_logs_reserve();
 #endif
