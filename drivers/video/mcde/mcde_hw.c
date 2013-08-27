@@ -1424,16 +1424,6 @@ static int set_channel_state_sync(struct mcde_chnl_state *chnl,
 
 	/* Wait for IDLE before changing state */
 	if (chnl_state != CHNLSTATE_IDLE) {
-		/* -------------------
-		 * FIXME:
-		 * munjeni @ XDA 2013 - channel never reach CHNLSTATE_IDLE here!
-		 * This is temporary fix!
-		 */
-		if (chnl_state == 4 || chnl_state == 7) {
-			printk("mcde mcde: Channel state change newer reach idle state!!!\n");
-			return 0;
-		}
-		/* ------------------- */
 		ret = wait_event_timeout(chnl->state_waitq,
 			/* STOPPED -> IDLE is manual, so wait for both */
 			chnl->state == CHNLSTATE_STOPPED ||
