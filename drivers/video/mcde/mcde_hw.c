@@ -1429,7 +1429,7 @@ static int set_channel_state_sync(struct mcde_chnl_state *chnl,
 		 * munjeni @ XDA 2013 - channel never reach CHNLSTATE_IDLE here!
 		 * This is temporary fix!
 		 */
-		if (chnl_state == CHNLSTATE_DSI_WRITE || chnl_state == CHNLSTATE_RUNNING) {
+		if (chnl_state == 4 || chnl_state == 7) {
 			printk("mcde mcde: Channel state change newer reach idle state!!!\n");
 			return 0;
 		}
