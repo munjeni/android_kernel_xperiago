@@ -90,7 +90,7 @@ hardboot:
  * Munjeni @ XDA 2013:
  * Soft reboot function for Xperia Go and Sola
  */
-#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT)
+#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT) || defined(CONFIG_MACH_U8500_NYPON)
 	ldr r0,soft_reset_addr
 	mov r1, #1
 	str r1, [r0]

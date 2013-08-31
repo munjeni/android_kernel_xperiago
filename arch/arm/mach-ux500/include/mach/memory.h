@@ -15,12 +15,12 @@
 #define PLAT_PHYS_OFFSET	UL(0x00000000)
 #define BUS_OFFSET	UL(0x00000000)
 
-#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT)
+#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT) || defined(CONFIG_MACH_U8500_NYPON)
 #define END_MEM		            UL(0x1FDFFFFF)
 #endif
 
 #if defined(CONFIG_KEXEC_HARDBOOT)
-#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT)
+#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT) || defined(CONFIG_MACH_U8500_NYPON)
 #define KEXEC_HB_PAGE_ADDR		UL(0x1FE00000)
 #else
 #error "Adress for kexec hardboot page not defined"
