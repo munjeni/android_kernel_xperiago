@@ -86,22 +86,22 @@ choice
 	  block devices.
 
 	config DEFAULT_DEADLINE
-		bool "Deadline"
+		bool "Deadline" if IOSCHED_DEADLINE=y
 
 	config DEFAULT_CFQ
-		bool "CFQ"
+		bool "CFQ" if IOSCHED_CFQ=y
 
 	config DEFAULT_SIO
-		bool "SIO"
+		bool "SIO" if IOSCHED_SIO=y
 
 	config DEFAULT_VR
-		bool "V(R)"
+		bool "V(R)" if IOSCHED_VR=y
 
 	config DEFAULT_NOOP
 		bool "No-op"
 
 	config DEFAULT_ROW
-		bool "ROW"
+		bool "ROW" if IOSCHED_ROW=y
 		help
 		  The ROW I/O scheduler gives priority to READ requests
 		  over the WRITE requests when dispatching, without starving
@@ -111,7 +111,7 @@ choice
 		  Most suitable for mobile devices.
 
 	config DEFAULT_ZEN
-		bool "ZEN"
+		bool "ZEN" if IOSCHED_ZEN=y
 
 endchoice
 
