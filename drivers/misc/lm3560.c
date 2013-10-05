@@ -1443,23 +1443,23 @@ static ssize_t attr_status_show(struct device *dev,
 }
 
 static struct device_attribute attributes[] = {
-	__ATTR(torch_enable, 0660,
+	__ATTR(torch_enable, 0666,
 		attr_torch_enable_show, attr_torch_enable_store),
-	__ATTR(torch_current, 0660,
+	__ATTR(torch_current, 0666,
 		attr_torch_current_show, attr_torch_current_store),
-	__ATTR(flash_enable, 0660,
+	__ATTR(flash_enable, 0666,
 		attr_flash_enable_show, attr_flash_enable_store),
-	__ATTR(flash_current, 0660,
+	__ATTR(flash_current, 0666,
 		attr_flash_current_show, attr_flash_current_store),
-	__ATTR(flash_duration, 0660,
+	__ATTR(flash_duration, 0666,
 		attr_flash_duration_show, attr_flash_duration_store),
-	__ATTR(flash_synchronization, 0660,
+	__ATTR(flash_synchronization, 0666,
 		attr_flash_sync_enable_show, attr_flash_sync_enable_store),
-	__ATTR(privacy_enable, 0660,
+	__ATTR(privacy_enable, 0666,
 		attr_privacy_enable_show, attr_privacy_enable_store),
-	__ATTR(privacy_current, 0660,
+	__ATTR(privacy_current, 0666,
 		attr_privacy_current_show, attr_privacy_current_store),
-	__ATTR(status, 0440, attr_status_show, NULL),
+	__ATTR(status, 0444, attr_status_show, NULL),
 };
 
 static int lm3560_create_sysfs_interfaces(struct device *dev)
