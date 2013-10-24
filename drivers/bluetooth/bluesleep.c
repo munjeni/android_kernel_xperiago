@@ -47,7 +47,8 @@
 #include <linux/wakelock.h>
 #include <mach/gpio.h>
 #include <linux/serial_core.h>
-#include <linux/tegra_uart.h>
+#include <linux/amba/bus.h>
+#include <linux/amba/serial.h>
 
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h> /* event notifications */
@@ -71,6 +72,11 @@
 #define BT_ENABLE_IRQ_WAKE 1
 
 #define BT_BLUEDROID_SUPPORT 1
+
+extern void pl011_clock_on(struct uart_port *port);
+extern void pl011_clock_off(struct work_struct *work);
+extern void pl011_set_mctrl(struct uart_port *port, unsigned int mctrl);
+extern unsigned int pl01x_tx_empty(struct uart_port *port);
 
 struct bluesleep_info {
 	unsigned host_wake;
@@ -165,11 +171,11 @@ static void hsuart_power(int on)
 	if (bsi->uport == NULL)
 		return;
 	if (on) {
-		tegra_uart_request_clock_on(bsi->uport);
-		tegra_uart_set_mctrl(bsi->uport, TIOCM_RTS);
+		pl011_clock_on(bsi->uport);
+		pl011_set_mctrl(bsi->uport, TIOCM_RTS);
 	} else {
-		tegra_uart_set_mctrl(bsi->uport, 0);
-		tegra_uart_request_clock_off(bsi->uport);
+		pl011_set_mctrl(bsi->uport, 0);
+		pl011_clock_off(bsi->uport);
 	}
 }
 
@@ -212,7 +218,7 @@ static void bluesleep_sleep_work(struct work_struct *work)
 			return;
 		}
 
-		if (tegra_uart_is_tx_empty(bsi->uport)) {
+		if (pl01x_tx_empty(bsi->uport)) {
 			BT_DBG("going to sleep...");
 			set_bit(BT_ASLEEP, &flags);
 			/*Deactivating UART */
@@ -796,8 +802,8 @@ static int bluesleep_resume(struct platform_device *pdev)
 	if ((bsi->uport != NULL) &&
 		(gpio_get_value(bsi->host_wake) == bsi->irq_polarity)) {
 			BT_DBG("bluesleep resume form BT event...\n");
-			tegra_uart_request_clock_on(bsi->uport);
-			tegra_uart_set_mctrl(bsi->uport, TIOCM_RTS);
+			pl011_clock_on(bsi->uport);
+			pl011_set_mctrl(bsi->uport, TIOCM_RTS);
 		}
 		clear_bit(BT_SUSPEND, &flags);
 	}

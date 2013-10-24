@@ -1129,7 +1129,7 @@ static int pl011_backup(struct uart_amba_port *uap, bool suspend)
 
 #ifdef CONFIG_SERIAL_AMBA_PL011_CLOCK_CONTROL
 /* Turn clock off if TX buffer is empty, otherwise reschedule */
-static void pl011_clock_off(struct work_struct *work)
+void pl011_clock_off(struct work_struct *work)
 {
 	struct uart_amba_port *uap = container_of(work, struct uart_amba_port,
 							clk_off_work.work);
@@ -1182,7 +1182,7 @@ static void pl011_clock_request_off(struct uart_port *port)
 }
 
 /* Request to immediately turn on uart clock */
-static void pl011_clock_on(struct uart_port *port)
+void pl011_clock_on(struct uart_port *port)
 {
 	unsigned long flags;
 	struct uart_amba_port *uap = (struct uart_amba_port *)(port);
@@ -1482,7 +1482,7 @@ static irqreturn_t pl011_int(int irq, void *dev_id)
 	return IRQ_RETVAL(1);
 }
 
-static unsigned int pl01x_tx_empty(struct uart_port *port)
+unsigned int pl01x_tx_empty(struct uart_port *port)
 {
 	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	unsigned int status = readw(uap->port.membase + UART01x_FR);
@@ -1507,7 +1507,7 @@ static unsigned int pl01x_get_mctrl(struct uart_port *port)
 	return result;
 }
 
-static void pl011_set_mctrl(struct uart_port *port, unsigned int mctrl)
+void pl011_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	unsigned int cr;
