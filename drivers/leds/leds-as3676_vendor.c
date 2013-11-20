@@ -2289,17 +2289,16 @@ static ssize_t as3676_audio_color_store(struct device *dev,
 static ssize_t as3676_als_lx_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
-		snprintf(buf, PAGE_SIZE,
-				"-1 lx (amb_result=n/a,"
-				"offset=n/a,amb_gain=n/a,adc=10\n");
-		return strnlen(buf, PAGE_SIZE);
+		//Dirty workaround
+		return as3676_als_result_show(dev, attr, buf);
 }
 
 static ssize_t as3676_als_lx_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t size)
 {
-	return -EINVAL;
+		//Dirty workaround
+		return as3676_als_result_store(dev, attr, buf, size);
 }
 
 static struct device_attribute as3676_attributes[] = {
@@ -2556,4 +2555,3 @@ MODULE_DESCRIPTION("AS3676 LED dimmer");
 
 module_init(as3676_init);
 module_exit(as3676_exit);
-
