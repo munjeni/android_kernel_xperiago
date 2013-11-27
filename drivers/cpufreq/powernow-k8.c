@@ -82,9 +82,9 @@ static u32 find_khz_freq_from_fid(u32 fid)
 }
 
 static u32 find_khz_freq_from_pstate(struct cpufreq_frequency_table *data,
-				     u32 pstate)
+		u32 pstate)
 {
-	return data[ps_to_as[pstate]].frequency;
+	return data[pstate].frequency;
 }
 
 /* Return the vco fid for an input fid
@@ -1615,3 +1615,4 @@ MODULE_LICENSE("GPL");
 
 late_initcall(powernowk8_init);
 module_exit(powernowk8_exit);
+
