@@ -192,7 +192,7 @@ static int __init ux500_l2x0_unlock(void)
 	return 0;
 }
 
-static int __init ux500_l2x0_init(void)
+int __init ux500_l2x0_init(void)
 {
 	uint32_t aux_val = 0x3e000000;
 
