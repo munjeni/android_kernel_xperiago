@@ -286,8 +286,6 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu = smp_processor_id();
 
-	printk("CPU%u: Booted secondary processor\n", cpu);
-
 	/*
 	 * All kernel threads share the same mm context; grab a
 	 * reference and switch to it.
@@ -298,6 +296,8 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	cpu_switch_mm(mm->pgd, mm);
 	enter_lazy_tlb(mm, current);
 	local_flush_tlb_all();
+
+	printk("CPU%u: Booted secondary processor\n", cpu);
 
 	cpu_init();
 	preempt_disable();
@@ -461,9 +461,7 @@ asmlinkage void __exception_irq_entry do_local_timer(struct pt_regs *regs)
 
 	if (local_timer_ack()) {
 		__inc_irq_stat(cpu, local_timer_irqs);
-		irq_enter();
 		ipi_timer();
-		irq_exit();
 	}
 
 	set_irq_regs(old_regs);
@@ -631,9 +629,7 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 
 	switch (ipinr) {
 	case IPI_TIMER:
-		irq_enter();
 		ipi_timer();
-		irq_exit();
 		break;
 
 	case IPI_RESCHEDULE:
@@ -641,21 +637,15 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 		break;
 
 	case IPI_CALL_FUNC:
-		irq_enter();
 		generic_smp_call_function_interrupt();
-		irq_exit();
 		break;
 
 	case IPI_CALL_FUNC_SINGLE:
-		irq_enter();
 		generic_smp_call_function_single_interrupt();
-		irq_exit();
 		break;
 
 	case IPI_CPU_STOP:
-		irq_enter();
 		ipi_cpu_stop(cpu);
-		irq_exit();
 		break;
 
 	case IPI_CPU_BACKTRACE:
