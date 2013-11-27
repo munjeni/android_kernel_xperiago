@@ -5769,6 +5769,10 @@ __offline_isolated_pages(unsigned long start_pfn, unsigned long end_pfn)
 		pasr_kget(page, order);
 		__mod_zone_page_state(zone, NR_FREE_PAGES,
 				      - (1UL << order));
+#ifdef CONFIG_HIGHMEM
+		if (PageHighMem(page))
+			totalhigh_pages -= 1 << order;
+#endif
 		for (i = 0; i < (1 << order); i++)
 			SetPageReserved((page+i));
 		pfn += (1 << order);

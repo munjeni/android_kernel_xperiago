@@ -320,6 +320,25 @@ static void l2x0_disable(void)
 	spin_unlock_irqrestore(&l2x0_lock, flags);
 }
 
+static void __init l2x0_unlock(__u32 cache_id)
+{
+	int lockregs;
+	int i;
+
+	if (cache_id == L2X0_CACHE_ID_PART_L310)
+		lockregs = 8;
+	else
+		/* L210 and unknown types */
+		lockregs = 1;
+
+	for (i = 0; i < lockregs; i++) {
+		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_D_BASE +
+			       i * L2X0_LOCKDOWN_STRIDE);
+		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_I_BASE +
+			       i * L2X0_LOCKDOWN_STRIDE);
+	}
+}
+
 void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 {
 	__u32 aux;
@@ -331,6 +350,9 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 	l2x0_cache_id = readl_relaxed(l2x0_base + L2X0_CACHE_ID);
 	aux = readl_relaxed(l2x0_base + L2X0_AUX_CTRL);
 
+	aux &= aux_mask;
+	aux |= aux_val;
+
 	/* Determine the number of ways */
 	switch (l2x0_cache_id & L2X0_CACHE_ID_PART_MASK) {
 	case L2X0_CACHE_ID_PART_L310:
@@ -339,13 +361,6 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 		else
 			l2x0_ways = 8;
 		type = "L310";
-
-		/*
-		 * Set bit 22 in the auxiliary control register. If this bit
-		 * is cleared, PL310 treats Normal Shared Non-cacheable
-		 * accesses as Cacheable no-allocate.
-		 */
-		aux_val |= 1 << 22;
 		break;
 	case L2X0_CACHE_ID_PART_L210:
 		l2x0_ways = (aux >> 13) & 0xf;
@@ -374,8 +389,8 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 	 * accessing the below registers will fault.
 	 */
 	if (!(readl_relaxed(l2x0_base + L2X0_CTRL) & 1)) {
-		aux &= aux_mask;
-		aux |= aux_val;
+		/* Make sure that I&D is not locked down when starting */
+		l2x0_unlock(cache_id);
 
 		/* l2x0 controller is disabled */
 		writel_relaxed(aux, l2x0_base + L2X0_AUX_CTRL);
@@ -392,6 +407,7 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 	outer_cache.sync = l2x0_cache_sync;
 	outer_cache.flush_all = l2x0_flush_all;
 	outer_cache.inv_all = l2x0_inv_all;
+	outer_cache.clean_all = l2x0_clean_all;
 	outer_cache.disable = l2x0_disable;
 	outer_cache.set_debug = l2x0_set_debug;
 
@@ -399,3 +415,4 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 	printk(KERN_INFO "l2x0: %d ways, CACHE_ID 0x%08x, AUX_CTRL 0x%08x, Cache size: %d B\n",
 			l2x0_ways, l2x0_cache_id, aux, l2x0_size);
 }
+
