@@ -55,9 +55,6 @@ struct sco_conninfo {
 struct sco_conn {
 	struct hci_conn	*hcon;
 
-	bdaddr_t	*dst;
-	bdaddr_t	*src;
-
 	spinlock_t	lock;
 	struct sock	*sk;
 
@@ -72,9 +69,10 @@ struct sco_conn {
 
 struct sco_pinfo {
 	struct bt_sock	bt;
-	struct bt_sco_parameters	param;
-	__u8	no_autoretry;
-
+	bdaddr_t	src;
+	bdaddr_t	dst;
+	__u32		flags;
+	__u16		setting;
 	struct sco_conn	*conn;
 };
 

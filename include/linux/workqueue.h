@@ -5,6 +5,7 @@
 #ifndef _LINUX_WORKQUEUE_H
 #define _LINUX_WORKQUEUE_H
 
+#include <linux/version.h>
 #include <linux/timer.h>
 #include <linux/linkage.h>
 #include <linux/bitops.h>
@@ -267,6 +268,10 @@ enum {
 #define WQ_UNBOUND_MAX_ACTIVE	\
 	max_t(int, WQ_MAX_ACTIVE, num_possible_cpus() * WQ_MAX_UNBOUND_PER_CPU)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
+#define __WQ_ORDERED	0
+#endif
+
 /*
  * System-wide workqueues which are always present.
  *
@@ -304,42 +309,33 @@ extern struct workqueue_struct *
 __alloc_workqueue_key(const char *name, unsigned int flags, int max_active,
 		      struct lock_class_key *key, const char *lock_name);
 
+struct workqueue_struct *
+backport_alloc_workqueue(const char *fmt, unsigned int flags,
+			 int max_active, struct lock_class_key *key,
+			 const char *lock_name, ...);
+
 #ifdef CONFIG_LOCKDEP
-#define alloc_workqueue(name, flags, max_active)		\
-({								\
-	static struct lock_class_key __key;			\
-	const char *__lock_name;				\
-								\
-	if (__builtin_constant_p(name))				\
-		__lock_name = (name);				\
-	else							\
-		__lock_name = #name;				\
-								\
-	__alloc_workqueue_key((name), (flags), (max_active),	\
-			      &__key, __lock_name);		\
+#define alloc_workqueue(fmt, flags, max_active, args...)		\
+({									\
+	static struct lock_class_key __key;				\
+	const char *__lock_name;					\
+									\
+	if (__builtin_constant_p(fmt))					\
+		__lock_name = (fmt);					\
+	else								\
+		__lock_name = #fmt;					\
+									\
+	backport_alloc_workqueue((fmt), (flags), (max_active),		\
+				 &__key, __lock_name, ##args);		\
 })
 #else
-#define alloc_workqueue(name, flags, max_active)		\
-	__alloc_workqueue_key((name), (flags), (max_active), NULL, NULL)
+#define alloc_workqueue(fmt, flags, max_active, args...)		\
+	backport_alloc_workqueue((fmt), (flags), (max_active),		\
+				 NULL, NULL, ##args)
 #endif
 
-/**
- * alloc_ordered_workqueue - allocate an ordered workqueue
- * @name: name of the workqueue
- * @flags: WQ_* flags (only WQ_FREEZABLE and WQ_MEM_RECLAIM are meaningful)
- *
- * Allocate an ordered workqueue.  An ordered workqueue executes at
- * most one work item at any given time in the queued order.  They are
- * implemented as unbound workqueues with @max_active of one.
- *
- * RETURNS:
- * Pointer to the allocated workqueue on success, %NULL on failure.
- */
-static inline struct workqueue_struct *
-alloc_ordered_workqueue(const char *name, unsigned int flags)
-{
-	return alloc_workqueue(name, WQ_UNBOUND | flags, 1);
-}
+#define alloc_ordered_workqueue(fmt, flags, args...) \
+	alloc_workqueue(fmt, WQ_UNBOUND | __WQ_ORDERED | (flags), 1, ##args)
 
 #define create_workqueue(name)					\
 	alloc_workqueue((name), WQ_MEM_RECLAIM, 1)

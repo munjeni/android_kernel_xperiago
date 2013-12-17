@@ -170,6 +170,7 @@ static bool handle_rx_evt(struct btcg2900_info *info, struct sk_buff *skb)
 static void hci_read_cb(struct cg2900_user_data *user, struct sk_buff *skb)
 {
 	int err = 0;
+	struct hci_dev *hdev;
 	struct dev_info *dev_info;
 	struct btcg2900_info *info;
 
@@ -179,6 +180,7 @@ static void hci_read_cb(struct cg2900_user_data *user, struct sk_buff *skb)
 	if (user->dev != info->evt || !handle_rx_evt(info, skb)) {
 		bt_cb(skb)->pkt_type = dev_info->hci_data_type;
 		skb->dev = (struct net_device *)info->hdev;
+		hdev = (struct hci_dev *)(skb->dev);
 		/* Update BlueZ stats */
 		info->hdev->stat.byte_rx += skb->len;
 		if (bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT)
@@ -189,7 +191,7 @@ static void hci_read_cb(struct cg2900_user_data *user, struct sk_buff *skb)
 		BT_DBG("Data receive %d bytes", skb->len);
 
 		/* Provide BlueZ with received frame*/
-		err = hci_recv_frame(skb);
+		err = hci_recv_frame(hdev, skb);
 		/* If err, skb have been freed in hci_recv_frame() */
 		if (err)
 			BT_ERR(NAME "Failed in supplying packet to Bluetooth"
@@ -229,17 +231,11 @@ static void hci_reset_cb(struct cg2900_user_data *dev)
 		return;
 
 	/*
-	 * Deregister HCI device. Close and Destruct functions should
+	 * Deregister HCI device. Close should
 	 * in turn be called by BlueZ.
 	 */
 	BT_DBG("Deregister HCI device");
-	err = hci_unregister_dev(info->hdev);
-	if (err)
-		BT_ERR(NAME "Can not deregister HCI device! (%d)", err);
-		/*
-		 * Now we are in trouble. Try to register a new hdev
-		 * anyway even though this will cost some memory.
-		 */
+	hci_unregister_dev(info->hdev);
 
 	wait_event_timeout(hci_wait_queue,
 			(RESET_UNREGISTERED == info->reset_state),
@@ -284,7 +280,7 @@ static int btcg2900_open(struct hci_dev *hdev)
 		return -EINVAL;
 	}
 
-	info = (struct btcg2900_info *)hdev->driver_data;
+	info = hci_get_drvdata(hdev);
 	if (!info) {
 		BT_ERR(NAME "NULL supplied for driver_data");
 		return -EINVAL;
@@ -354,7 +350,7 @@ static int btcg2900_close(struct hci_dev *hdev)
 		return -EINVAL;
 	}
 
-	info = (struct btcg2900_info *)hdev->driver_data;
+	info = hci_get_drvdata(hdev);
 	if (!info) {
 		BT_ERR(NAME "NULL supplied for driver_data");
 		return -EINVAL;
@@ -387,9 +383,8 @@ remove_users:
  *   -EOPNOTSUPP if supplied packet type is not supported.
  *   Error codes from cg2900_write.
  */
-static int btcg2900_send(struct sk_buff *skb)
+static int btcg2900_send(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	struct hci_dev *hdev;
 	struct btcg2900_info *info;
 	struct cg2900_user_data *pf_data;
 	int err = 0;
@@ -399,13 +394,12 @@ static int btcg2900_send(struct sk_buff *skb)
 		return -EINVAL;
 	}
 
-	hdev = (struct hci_dev *)(skb->dev);
 	if (!hdev) {
 		BT_ERR(NAME "NULL supplied for hdev");
 		return -EINVAL;
 	}
 
-	info = (struct btcg2900_info *)hdev->driver_data;
+	info = hci_get_drvdata(hdev);
 	if (!info) {
 		BT_ERR(NAME "NULL supplied for info");
 		return -EINVAL;
@@ -437,41 +431,6 @@ static int btcg2900_send(struct sk_buff *skb)
 	};
 
 	return err;
-}
-
-/**
- * btcg2900_destruct() - Destruct HCI interface.
- * @hdev:	HCI device being destructed.
- */
-static void btcg2900_destruct(struct hci_dev *hdev)
-{
-	struct btcg2900_info *info;
-
-	BT_DBG("btcg2900_destruct");
-
-	info = hdev->driver_data;
-	if (!info) {
-		BT_ERR(NAME "NULL supplied for info");
-		return;
-	}
-
-	/*
-	 * When destruct is called it means that the Bluetooth stack is done
-	 * with the HCI device and we can now free it.
-	 * Normally we do this only when removing the whole module through
-	 * btcg2900_remove(), but when being reset we free the device here and
-	 * we then set the reset state so that the reset handler can allocate a
-	 * new HCI device and then register it to the Bluetooth stack.
-	 */
-	if (info->reset_state == RESET_ACTIVATED) {
-		if (info->hdev) {
-			hci_free_dev(info->hdev);
-			info->hdev = NULL;
-		}
-		BT_DBG("New reset_state: RESET_UNREGISTERED");
-		info->reset_state = RESET_UNREGISTERED;
-		wake_up_all(&hci_wait_queue);
-	}
 }
 
 /**
@@ -565,12 +524,10 @@ static int register_bluetooth(struct btcg2900_info *info)
 
 	SET_HCIDEV_DEV(info->hdev, info->parent);
 	info->hdev->bus = pf_data->channel_data.bt_bus;
-	info->hdev->driver_data = info;
-	info->hdev->owner = THIS_MODULE;
+	hci_set_drvdata(info->hdev, info);
 	info->hdev->open = btcg2900_open;
 	info->hdev->close = btcg2900_close;
 	info->hdev->send = btcg2900_send;
-	info->hdev->destruct = btcg2900_destruct;
 
 	err = hci_register_dev(info->hdev);
 	if (err) {
@@ -762,10 +719,9 @@ static int remove_common(struct platform_device *pdev,
 		goto finished;
 
 	BT_INFO("Unregistering CG2900");
-	info->hdev->driver_data = NULL;
-	err = hci_unregister_dev(info->hdev);
-	if (err)
-		BT_ERR("Can not unregister HCI device (%d)", err);
+	hci_set_drvdata(info->hdev, NULL);
+	hci_unregister_dev(info->hdev);
+
 	hci_free_dev(info->hdev);
 	info->hdev = NULL;
 
@@ -908,3 +864,4 @@ MODULE_AUTHOR("Henrik Possung ST-Ericsson");
 MODULE_AUTHOR("Josef Kindberg ST-Ericsson");
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Linux Bluetooth HCI H:4 Driver for ST-Ericsson controller");
+

@@ -153,4 +153,21 @@ extern struct hlist_node *seq_hlist_start_head_rcu(struct hlist_head *head,
 extern struct hlist_node *seq_hlist_next_rcu(void *v,
 						   struct hlist_head *head,
 						   loff_t *ppos);
+
+#ifdef CONFIG_USER_NS
+static inline struct user_namespace *seq_user_ns(struct seq_file *seq)
+{
+	struct file *f = container_of((void *) seq, struct file, private_data);
+
+	return f->f_cred->user_ns;
+}
+
+#else
+static inline struct user_namespace *seq_user_ns(struct seq_file *seq)
+{
+	extern struct user_namespace init_user_ns;
+	return &init_user_ns;
+}
+#endif /* CONFIG_USER_NS */
+
 #endif

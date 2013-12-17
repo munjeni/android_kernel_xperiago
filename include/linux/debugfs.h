@@ -195,4 +195,11 @@ static inline bool debugfs_initialized(void)
 
 #endif
 
+static inline int simple_open(struct inode *inode, struct file *file)
+{
+	if (inode->i_private)
+		file->private_data = inode->i_private;
+	return 0;
+}
+
 #endif

@@ -4,4 +4,4 @@
 
 obj-$(CONFIG_BT_HIDP) += hidp.o
 
-hidp-objs := core.o sock.o
+hidp-objs := backport-3.12.o core.o sock.o

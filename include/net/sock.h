@@ -62,6 +62,8 @@
 #include <net/dst.h>
 #include <net/checksum.h>
 
+#include <linux/magic.h>
+
 /*
  * This structure really needs to be cleaned up.
  * Most of it is for TCP, and not used by any of
@@ -519,8 +521,8 @@ static __inline__ void sk_add_bind_node(struct sock *sk,
 	hlist_add_head(&sk->sk_bind_node, list);
 }
 
-#define sk_for_each(__sk, node, list) \
-	hlist_for_each_entry(__sk, node, list, sk_node)
+#define sk_for_each(...) \
+	macro_dispatcher(sk_for_each, __VA_ARGS__)(__VA_ARGS__)
 #define sk_for_each_rcu(__sk, node, list) \
 	hlist_for_each_entry_rcu(__sk, node, list, sk_node)
 #define sk_nulls_for_each(__sk, node, list) \
@@ -533,8 +535,16 @@ static __inline__ void sk_add_bind_node(struct sock *sk,
 #define sk_nulls_for_each_from(__sk, node) \
 	if (__sk && ({ node = &(__sk)->sk_nulls_node; 1; })) \
 		hlist_nulls_for_each_entry_from(__sk, node, sk_nulls_node)
-#define sk_for_each_safe(__sk, node, tmp, list) \
+#define sk_for_each3(__sk, node, list) \
+	hlist_for_each_entry(__sk, node, list, sk_node)
+#define sk_for_each_safe4(__sk, node, tmp, list) \
 	hlist_for_each_entry_safe(__sk, node, tmp, list, sk_node)
+#define sk_for_each2(__sk, list) \
+	hlist_for_each_entry(__sk, list, sk_node)
+#define sk_for_each_safe3(__sk, tmp, list) \
+	hlist_for_each_entry_safe(__sk, tmp, list, sk_node)
+#define sk_for_each_safe(...) \
+	macro_dispatcher(sk_for_each_safe, __VA_ARGS__)(__VA_ARGS__)
 #define sk_for_each_bound(__sk, node, list) \
 	hlist_for_each_entry(__sk, node, list, sk_bind_node)
 
@@ -1861,5 +1871,13 @@ extern int sysctl_optmem_max;
 
 extern __u32 sysctl_wmem_default;
 extern __u32 sysctl_rmem_default;
+
+/*
+ * Adding 14 to SOCK_QUEUE_SHRUNK will reach a bet that can't be
+ * set on older kernels, so sock_flag() will always return false.
+ */
+#define SOCK_SELECT_ERR_QUEUE (SOCK_QUEUE_SHRUNK + 14)
+
+
 
 #endif	/* _SOCK_H */

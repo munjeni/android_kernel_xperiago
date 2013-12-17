@@ -137,4 +137,12 @@ extern ssize_t sysfs_format_mac(char *buf, const unsigned char *addr, int len);
 
 #endif
 
+#ifndef ETH_P_TDLS
+#define ETH_P_TDLS 0x890D          /* TDLS */
+#endif
+
+#ifndef ETH_P_802_3_MIN
+#define ETH_P_802_3_MIN 0x0600
+#endif
+
 #endif	/* _LINUX_IF_ETHER_H */

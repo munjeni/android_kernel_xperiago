@@ -304,6 +304,8 @@ struct hid_item {
  */
 #define MAX_USBHID_BOOT_QUIRKS 4
 
+#define HID_TYPE_USBNONE 2
+
 #define HID_QUIRK_INVERT			0x00000001
 #define HID_QUIRK_NOTOUCH			0x00000002
 #define HID_QUIRK_IGNORE			0x00000004
@@ -922,6 +924,9 @@ do {									\
 	dev_info(&(hid)->dev, fmt, ##arg)
 #define hid_dbg(hid, fmt, arg...)			\
 	dev_dbg(&(hid)->dev, fmt, ##arg)
+
+extern bool hid_ignore(struct hid_device *);
+u8 *hid_alloc_report_buf(struct hid_report *report, gfp_t flags);
 
 #endif /* __KERNEL__ */
 
