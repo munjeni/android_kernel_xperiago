@@ -146,8 +146,17 @@
 #include "../../../drivers/staging/taos/tsl277x.h"
 #endif
 
+#ifdef CONFIG_ANDROID_PMEM
+#include <linux/android_pmem.h>
+#endif
+
 #define CRASH_LOGS_START 0x1FF00000
 #define CRASH_LOGS_SIZE SZ_1M
+
+#ifdef CONFIG_ANDROID_PMEM
+#define PMEM_BASE	0x1F400000
+#define PMEM_BASE_SIZE	0x00A00000
+#endif
 
 #ifdef CONFIG_KEXEC_HARDBOOT
 #define KEXEC_HARDBOOT_START   0x1FE00000
@@ -1999,6 +2008,47 @@ static struct platform_device ste_ff_vibra_device = {
 	.name = "ste_ff_vibra"
 };
 
+#ifdef CONFIG_ANDROID_PMEM
+static struct resource android_pmem_resources[] = {
+	[0] = {
+		.start  = PMEM_BASE,
+		.end    = PMEM_BASE + PMEM_BASE_SIZE - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+};
+
+static struct android_pmem_platform_data android_pmem_pdata = {
+	.name = "pmem",
+	.start = PMEM_BASE,
+	.size = PMEM_BASE_SIZE,
+	.no_allocator = 0,
+	.cached = 1,
+};
+
+static struct platform_device android_pmem_device = {
+	.name = "android_pmem",
+	.id = 0,
+	.dev = {
+		.platform_data = &android_pmem_pdata,
+	},
+};
+
+static void android_pmem_reserve(void)
+{
+	if (memblock_reserve(PMEM_BASE, PMEM_BASE_SIZE)) {
+		printk(KERN_ERR "Failed to reserve memory for PMEM: "
+		       "%dM@0x%.8X\n",
+		       PMEM_BASE_SIZE / SZ_1M, PMEM_BASE);
+		return;
+	}
+	memblock_free(PMEM_BASE, PMEM_BASE_SIZE);
+	memblock_remove(PMEM_BASE, PMEM_BASE_SIZE);
+
+	android_pmem_device.num_resources  = ARRAY_SIZE(android_pmem_resources);
+	android_pmem_device.resource       = android_pmem_resources;
+}
+#endif
+
 #ifdef CONFIG_KEXEC_HARDBOOT
 static struct resource kexec_hardboot_resources[] = {
 	[0] = {
@@ -2235,6 +2285,9 @@ static struct platform_device *mop500_platform_devs[] __initdata = {
 #endif
 #ifdef CONFIG_KEXEC_HARDBOOT
 	&kexec_hardboot_device,
+#endif
+#ifdef CONFIG_ANDROID_PMEM
+	&android_pmem_device,
 #endif
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 	&ramdump_crash_logs_device,
@@ -2513,6 +2566,9 @@ static void __init riogrande_reserve(void)
 #endif
 #if defined(CONFIG_RAMDUMP_CRASH_LOGS) || defined(CONFIG_ANDROID_RAM_CONSOLE)
 	crash_logs_reserve();
+#endif
+#ifdef CONFIG_ANDROID_PMEM
+android_pmem_reserve();
 #endif
 }
 
