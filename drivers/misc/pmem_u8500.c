@@ -1079,7 +1079,7 @@ leave:
 	return bitnum;
 }
 
-static pgprot_t phys_mem_access_prot(struct file *file, pgprot_t vma_prot)
+static pgprot_t phys_mem_access_prot_v(struct file *file, pgprot_t vma_prot)
 {
 	int id = get_id(file);
 #ifdef pgprot_noncached
@@ -1328,7 +1328,7 @@ static int pmem_mmap(struct file *file, struct vm_area_struct *vma)
 
 	vma->vm_pgoff = pmem[id].start_addr(id, data) >> PAGE_SHIFT;
 
-	vma->vm_page_prot = phys_mem_access_prot(file, vma->vm_page_prot);
+	vma->vm_page_prot = phys_mem_access_prot_v(file, vma->vm_page_prot);
 
 	if (data->flags & PMEM_FLAGS_CONNECTED) {
 		struct pmem_region_node *region_node;
