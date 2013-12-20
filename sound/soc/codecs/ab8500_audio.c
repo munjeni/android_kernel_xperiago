@@ -2879,17 +2879,17 @@ static int ab8500_codec_set_dai_tdm_slot(struct snd_soc_dai *dai,
 	case 0:
 		break;
 	case 1:
-		i = find_first_bit(&tx_mask, sizeof(tx_mask));
+		i = find_first_bit((const long unsigned int *)tx_mask, sizeof(tx_mask));
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF1, clear_mask, slots+i);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF2, clear_mask, slots+i);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF3, clear_mask, slots+i);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF4, clear_mask, slots+i);
 		break;
 	case 2:
-		i = find_first_bit(&tx_mask, sizeof(tx_mask));
+		i = find_first_bit((const long unsigned int *)tx_mask, sizeof(tx_mask));
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF1, clear_mask, slots+i);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF3, clear_mask, slots+i);
-		i = find_next_bit(&tx_mask, sizeof(tx_mask), i+1);
+		i = find_next_bit((const long unsigned int *)tx_mask, sizeof(tx_mask), i+1);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF2, clear_mask, slots+i);
 		ab8500_codec_update_reg_audio(codec, REG_DASLOTCONF4, clear_mask, slots+i);
 		break;

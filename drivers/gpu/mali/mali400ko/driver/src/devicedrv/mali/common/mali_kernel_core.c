@@ -595,7 +595,7 @@ static _mali_osk_errcode_t mali_parse_config_memory(void)
 _mali_osk_errcode_t mali_initialize_subsystems(void)
 {
 	_mali_osk_errcode_t err;
-	mali_bool is_pmu_enabled;
+	mali_bool is_pmu_enabled = false;
 
 	err = mali_session_initialize();
 	if (_MALI_OSK_ERR_OK != err) goto session_init_failed;

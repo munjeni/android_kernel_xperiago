@@ -33,6 +33,8 @@
 
 extern struct platform_device mali_gpu_device;
 
+#define XPERIA_HAVE_NO_PM_RUNTIME 1
+
 #ifdef CONFIG_PM_RUNTIME
 static mali_bool have_runtime_reference = MALI_FALSE;
 #endif
@@ -47,6 +49,9 @@ void _mali_osk_pm_dev_enable(void)
 /* NB: Function is not thread safe */
 _mali_osk_errcode_t _mali_osk_pm_dev_idle(void)
 {
+#if XPERIA_HAVE_NO_PM_RUNTIME
+have_runtime_reference = MALI_FALSE;
+#else
 #ifdef CONFIG_PM_RUNTIME
 	if (MALI_TRUE == have_runtime_reference)
 	{
@@ -60,12 +65,16 @@ _mali_osk_errcode_t _mali_osk_pm_dev_idle(void)
 		have_runtime_reference = MALI_FALSE;
 	}
 #endif
+#endif
 	return _MALI_OSK_ERR_OK;
 }
 
 /* NB: Function is not thread safe */
 _mali_osk_errcode_t _mali_osk_pm_dev_activate(void)
 {
+#if XPERIA_HAVE_NO_PM_RUNTIME
+have_runtime_reference = MALI_FALSE;
+#else
 #ifdef CONFIG_PM_RUNTIME
 	if (MALI_TRUE != have_runtime_reference)
 	{
@@ -78,6 +87,7 @@ _mali_osk_errcode_t _mali_osk_pm_dev_activate(void)
 		}
 		have_runtime_reference = MALI_TRUE;
 	}
+#endif
 #endif
 	return _MALI_OSK_ERR_OK;
 }

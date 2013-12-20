@@ -2601,6 +2601,7 @@ exit:
 	return err;
 }
 
+#if 0
 static irqreturn_t
 as3677_isr(int this_irq, void *dev_id)
 {
@@ -2611,6 +2612,7 @@ as3677_isr(int this_irq, void *dev_id)
 	schedule_work(&data->isr_work);
 	return IRQ_HANDLED;
 }
+#endif
 
 static int as3677_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
@@ -2677,7 +2679,7 @@ static int as3677_probe(struct i2c_client *client,
 
 	INIT_WORK(&data->isr_work, as3677_fsm_transition);
 	INIT_DELAYED_WORK(&data->dim_work, as3677_dim_work);
-/*
+#if 0
 	err = request_irq(client->irq, as3677_isr,
 			IRQF_SAMPLE_RANDOM | IRQF_TRIGGER_LOW,
 			"as3677isr", &client->dev);
@@ -2687,7 +2689,7 @@ static int as3677_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Could not register isr!\n");
 		return err;
 	}
-*/
+#endif
 	i2c_set_clientdata(client, data);
 
 
