@@ -146,14 +146,14 @@
 #include "../../../drivers/staging/taos/tsl277x.h"
 #endif
 
-#ifdef CONFIG_ANDROID_PMEM
+#ifdef CONFIG_ANDROID_U8500_PMEM
 #include <linux/android_pmem.h>
 #endif
 
 #define CRASH_LOGS_START 0x1FF00000
 #define CRASH_LOGS_SIZE SZ_1M
 
-#ifdef CONFIG_ANDROID_PMEM
+#ifdef CONFIG_ANDROID_U8500_PMEM
 #define PMEM_BASE	0x1F400000
 #define PMEM_BASE_SIZE	0x00A00000
 #endif
@@ -2008,7 +2008,7 @@ static struct platform_device ste_ff_vibra_device = {
 	.name = "ste_ff_vibra"
 };
 
-#ifdef CONFIG_ANDROID_PMEM
+#ifdef CONFIG_ANDROID_U8500_PMEM
 static struct resource android_pmem_resources[] = {
 	[0] = {
 		.start  = PMEM_BASE,
@@ -2286,7 +2286,7 @@ static struct platform_device *mop500_platform_devs[] __initdata = {
 #ifdef CONFIG_KEXEC_HARDBOOT
 	&kexec_hardboot_device,
 #endif
-#ifdef CONFIG_ANDROID_PMEM
+#ifdef CONFIG_ANDROID_U8500_PMEM
 	&android_pmem_device,
 #endif
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
@@ -2567,7 +2567,7 @@ static void __init riogrande_reserve(void)
 #if defined(CONFIG_RAMDUMP_CRASH_LOGS) || defined(CONFIG_ANDROID_RAM_CONSOLE)
 	crash_logs_reserve();
 #endif
-#ifdef CONFIG_ANDROID_PMEM
+#ifdef CONFIG_ANDROID_U8500_PMEM
 android_pmem_reserve();
 #endif
 }

@@ -19,7 +19,7 @@ obj-$(CONFIG_PHANTOM)		+= phantom.o
 obj-$(CONFIG_SENSORS_BH1780)	+= bh1780gli.o
 obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
 obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
-ifeq ($(CONFIG_ARCH_U8500),y)
+ifeq ($(ANDROID_U8500_PMEM),y)
 	obj-$(CONFIG_ANDROID_PMEM)	+= pmem_u8500.o
 else
 obj-$(CONFIG_ANDROID_PMEM)	+= pmem.o

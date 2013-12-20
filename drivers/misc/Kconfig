@@ -65,6 +65,11 @@ config ANDROID_PMEM
 	bool "Android pmem allocator"
 	default y
 
+config ANDROID_U8500_PMEM
+	bool "Android u8500 pmem allocator"
+	---help---
+	  Sony Xperia U8500 pmem allocator. Say Y here to enable.
+
 config ATMEL_PWM
 	tristate "Atmel AT32/AT91 PWM support"
 	depends on AVR32 || ARCH_AT91SAM9263 || ARCH_AT91SAM9RL || ARCH_AT91CAP9
