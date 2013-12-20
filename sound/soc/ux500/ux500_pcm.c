@@ -366,10 +366,9 @@ ux500_pcm_prepare(struct snd_pcm_substream *substream)
 	struct ux500_pcm_dma_params *dma_params;
 	dma_cap_mask_t mask;
 	u16 per_data_width, mem_data_width;
+	struct dma_chan *chan;
 
 	pr_debug("%s: Enter\n", __func__);
-
-	struct dma_chan *chan;
 
 	mutex_lock(&private->pipeLock);
 	chan = private->pipeid;
