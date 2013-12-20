@@ -21,7 +21,7 @@
 #include <linux/mm.h>
 #include <linux/list.h>
 #include <linux/debugfs.h>
-#include <linux/android_pmem.h>
+#include "pmem_u8500.h"
 #include <linux/mempolicy.h>
 #include <linux/kobject.h>
 #include <linux/sched.h>
