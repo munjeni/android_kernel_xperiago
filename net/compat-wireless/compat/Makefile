@@ -1,10 +1,10 @@
 ifeq ($(STERICSSON_WLAN_BUILT_IN),y)
 
 EXTRA_CFLAGS +=  \
-        -DCOMPAT_BASE_TREE="\"$(shell cat $(shell pwd)/net/compat-wireless/compat_base_tree)\"" \
-        -DCOMPAT_BASE_TREE_VERSION="\"$(shell cat $(shell pwd)/net/compat-wireless/compat_base_tree_version)\"" \
+        -DCOMPAT_BASE_TREE="\"$(shell cat $(srctree)/net/compat-wireless/compat_base_tree)\"" \
+        -DCOMPAT_BASE_TREE_VERSION="\"$(shell cat $(srctree)/net/compat-wireless/compat_base_tree_version)\"" \
         -DCOMPAT_PROJECT="\"Compat-wireless\"" \
-        -DCOMPAT_VERSION="\"$(shell cat $(shell pwd)/net/compat-wireless/compat_version)\""
+        -DCOMPAT_VERSION="\"$(shell cat $(srctree)/net/compat-wireless/compat_version)\""
 
 obj-y += compat.o
 
