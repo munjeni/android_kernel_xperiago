@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2013 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -13,9 +13,6 @@
 
 #include "mali_osk.h"
 #include "mali_session.h"
-
-struct mali_cluster;
-struct mali_group;
 
 /** @brief Initialize Mali memory subsystem
  *
@@ -70,12 +67,19 @@ void mali_mmu_release_table_page(u32 pa);
 
 
 /** @brief Parse resource and prepare the OS memory allocator
+ *
+ * @param size Maximum size to allocate for Mali GPU.
+ * @return _MALI_OSK_ERR_OK on success, otherwise failure.
  */
-_mali_osk_errcode_t mali_memory_core_resource_os_memory(_mali_osk_resource_t * resource);
+_mali_osk_errcode_t mali_memory_core_resource_os_memory(u32 size);
 
 /** @brief Parse resource and prepare the dedicated memory allocator
+ *
+ * @param start Physical start address of dedicated Mali GPU memory.
+ * @param size Size of dedicated Mali GPU memory.
+ * @return _MALI_OSK_ERR_OK on success, otherwise failure.
  */
-_mali_osk_errcode_t mali_memory_core_resource_dedicated_memory(_mali_osk_resource_t * resource);
+_mali_osk_errcode_t mali_memory_core_resource_dedicated_memory(u32 start, u32 size);
 
 mali_allocation_engine mali_mem_get_memory_engine(void);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2011-2013 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -12,7 +12,7 @@
 #include "mali_osk.h"
 #include "mali_ukk.h"
 
-#if MALI_TIMELINE_PROFILING_ENABLED
+#if defined(CONFIG_MALI400_PROFILING)
 #include "mali_osk_profiling.h"
 #endif
 
@@ -21,7 +21,7 @@ _mali_osk_errcode_t _mali_ukk_vsync_event_report(_mali_uk_vsync_event_report_s *
 	_mali_uk_vsync_event event = (_mali_uk_vsync_event)args->event;
 	MALI_IGNORE(event); /* event is not used for release code, and that is OK */
 
-#if MALI_TIMELINE_PROFILING_ENABLED
+#if defined(CONFIG_MALI400_PROFILING)
 	/*
 	 * Manually generate user space events in kernel space.
 	 * This saves user space from calling kernel space twice in this case.

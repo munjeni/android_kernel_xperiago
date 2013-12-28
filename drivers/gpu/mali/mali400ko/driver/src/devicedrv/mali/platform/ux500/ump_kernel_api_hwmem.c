@@ -5,8 +5,8 @@
  * License terms: GNU General Public License (GPL), version 2.
  */
 
-#include "ump_kernel_types.h"
-#include "mali_kernel_common.h"
+#include "../../../ump/common/ump_kernel_types.h"
+#include "../../common/mali_kernel_common.h"
 
 #include <linux/hwmem.h>
 #include <linux/err.h>

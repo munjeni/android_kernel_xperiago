@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2013 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -148,7 +148,14 @@ _mali_osk_errcode_t _ump_osk_mem_mapregion_init( ump_memory_allocation * descrip
 
 	vma->vm_private_data = vma_usage_tracker;
 	vma->vm_flags |= VM_IO;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
 	vma->vm_flags |= VM_RESERVED;
+#else
+	vma->vm_flags |= VM_DONTDUMP;
+	vma->vm_flags |= VM_DONTEXPAND;
+	vma->vm_flags |= VM_PFNMAP;
+#endif
+
 
 	if (0==descriptor->is_cached)
 	{
@@ -219,18 +226,13 @@ static void level1_cache_flush_all(void)
 void _ump_osk_msync( ump_dd_mem * mem, void * virt, u32 offset, u32 size, ump_uk_msync_op op, ump_session_data * session_data )
 {
 	int i;
-	const void *start_v, *end_v;
 
 	/* Flush L1 using virtual address, the entire range in one go.
 	 * Only flush if user space process has a valid write mapping on given address. */
 	if( (mem) && (virt!=NULL) && (access_ok(VERIFY_WRITE, virt, size)) )
 	{
-		start_v = (void *)virt;
-		end_v   = (void *)(start_v + size - 1);
-		/*  There is no dmac_clean_range, so the L1 is always flushed,
-		 *  also for UMP_MSYNC_CLEAN. */
-		dmac_flush_range(start_v, end_v);
-		DBG_MSG(3, ("UMP[%02u] Flushing CPU L1 Cache. Cpu address: %x-%x\n", mem->secure_id, start_v,end_v));
+		__cpuc_flush_dcache_area(virt, size);
+		DBG_MSG(3, ("UMP[%02u] Flushing CPU L1 Cache. CPU address: %x, size: %x\n", mem->secure_id, virt, size));
 	}
 	else
 	{

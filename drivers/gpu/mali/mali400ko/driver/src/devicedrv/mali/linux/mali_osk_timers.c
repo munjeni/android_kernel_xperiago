@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2013 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -35,20 +35,32 @@ _mali_osk_timer_t *_mali_osk_timer_init(void)
 void _mali_osk_timer_add( _mali_osk_timer_t *tim, u32 ticks_to_expire )
 {
 	MALI_DEBUG_ASSERT_POINTER(tim);
-    tim->timer.expires = _mali_osk_time_tickcount() + ticks_to_expire;
+    tim->timer.expires = jiffies + ticks_to_expire;
     add_timer(&(tim->timer));
 }
 
-void _mali_osk_timer_mod( _mali_osk_timer_t *tim, u32 expiry_tick)
+void _mali_osk_timer_mod( _mali_osk_timer_t *tim, u32 ticks_to_expire)
 {
     MALI_DEBUG_ASSERT_POINTER(tim);
-    mod_timer(&(tim->timer), expiry_tick);
+    mod_timer(&(tim->timer), jiffies + ticks_to_expire);
 }
 
 void _mali_osk_timer_del( _mali_osk_timer_t *tim )
 {
     MALI_DEBUG_ASSERT_POINTER(tim);
     del_timer_sync(&(tim->timer));
+}
+
+void _mali_osk_timer_del_async( _mali_osk_timer_t *tim )
+{
+	MALI_DEBUG_ASSERT_POINTER(tim);
+	del_timer(&(tim->timer));
+}
+
+mali_bool _mali_osk_timer_pending( _mali_osk_timer_t *tim )
+{
+	MALI_DEBUG_ASSERT_POINTER(tim);
+	return 1 == timer_pending(&(tim->timer));
 }
 
 void _mali_osk_timer_setcallback( _mali_osk_timer_t *tim, _mali_osk_timer_callback_t callback, void *data )

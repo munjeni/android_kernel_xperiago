@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2013 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -66,20 +66,38 @@ typedef enum
 	MALI_PROFILING_EVENT_REASON_SINGLE_SW_FB_EVENT              = 4,
 	MALI_PROFILING_EVENT_REASON_SINGLE_SW_GP_ENQUEUE            = 5,
 	MALI_PROFILING_EVENT_REASON_SINGLE_SW_PP_ENQUEUE            = 6,
+	MALI_PROFILING_EVENT_REASON_SINGLE_SW_READBACK              = 7,
+	MALI_PROFILING_EVENT_REASON_SINGLE_SW_WRITEBACK             = 8,
     MALI_PROFILING_EVENT_REASON_SINGLE_SW_ENTER_API_FUNC        = 10,
     MALI_PROFILING_EVENT_REASON_SINGLE_SW_LEAVE_API_FUNC        = 11,
+	MALI_PROFILING_EVENT_REASON_SINGLE_SW_DISCARD_ATTACHMENTS     = 13,
     MALI_PROFILING_EVENT_REASON_SINGLE_SW_UMP_TRY_LOCK          = 53,
 	MALI_PROFILING_EVENT_REASON_SINGLE_SW_UMP_LOCK              = 54,
 	MALI_PROFILING_EVENT_REASON_SINGLE_SW_UMP_UNLOCK            = 55,
+	MALI_PROFILING_EVENT_REASON_SINGLE_LOCK_CONTENDED           = 56,
 } cinstr_profiling_event_reason_single_sw_t;
+
+/**
+ * These events are applicable when the type MALI_PROFILING_EVENT_TYPE_START/STOP is used from software channel
+ * to inform whether the core is physical or virtual
+ */
+typedef enum
+{
+	MALI_PROFILING_EVENT_REASON_START_STOP_HW_PHYSICAL  = 0,
+	MALI_PROFILING_EVENT_REASON_START_STOP_HW_VIRTUAL   = 1,
+} cinstr_profiling_event_reason_start_stop_hw_t;
 
 /**
  * These events are applicable when the type MALI_PROFILING_EVENT_TYPE_START/STOP is used from software channel
  */
 typedef enum
 {
-	MALI_PROFILING_EVENT_REASON_START_STOP_SW_NONE      = 0,
-	MALI_PROFILING_EVENT_REASON_START_STOP_MALI         = 1,
+	/*MALI_PROFILING_EVENT_REASON_START_STOP_SW_NONE            = 0,*/
+	MALI_PROFILING_EVENT_REASON_START_STOP_SW_MALI            = 1,
+	MALI_PROFILING_EVENT_REASON_START_STOP_SW_CALLBACK_THREAD = 2,
+	MALI_PROFILING_EVENT_REASON_START_STOP_SW_WORKER_THREAD   = 3,
+	MALI_PROFILING_EVENT_REASON_START_STOP_SW_BOTTOM_HALF     = 4,
+	MALI_PROFILING_EVENT_REASON_START_STOP_SW_UPPER_HALF      = 5,
 } cinstr_profiling_event_reason_start_stop_sw_t;
 
 /**
@@ -87,7 +105,7 @@ typedef enum
  */
 typedef enum
 {
-	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_NONE                   =  0, /* NOT used */
+	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_NONE                   =  0, /* used */
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_PIPELINE_FULL          =  1, /* NOT used */
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_VSYNC                  = 26, /* used in some build configurations */
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_FB_IFRAME_WAIT         = 27, /* USED */
@@ -103,6 +121,8 @@ typedef enum
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_X11_GLOBAL_LOCK        = 37, /* Not currently used */
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_X11_SWAP               = 38, /* Not currently used */
 	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_MALI_EGL_IMAGE_SYNC_WAIT = 39, /* USED */
+	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_GP_JOB_HANDLING         =40, /* USED */
+	MALI_PROFILING_EVENT_REASON_SUSPEND_RESUME_SW_PP_JOB_HANDLING         =41, /* USED */
 } cinstr_profiling_event_reason_suspend_resume_sw_t;
 
 /**
@@ -122,6 +142,31 @@ typedef enum
 {
 	MALI_PROFILING_EVENT_REASON_SINGLE_GPU_NONE              = 0,
 	MALI_PROFILING_EVENT_REASON_SINGLE_GPU_FREQ_VOLT_CHANGE  = 1,
+	MALI_PROFILING_EVENT_REASON_SINGLE_GPU_L20_COUNTERS      = 2,
+	MALI_PROFILING_EVENT_REASON_SINGLE_GPU_L21_COUNTERS      = 3,
+	MALI_PROFILING_EVENT_REASON_SINGLE_GPU_L22_COUNTERS      = 4,
 } cinstr_profiling_event_reason_single_gpu_t;
+
+/**
+ * These values are applicable for the 3rd data parameter when
+ * the type MALI_PROFILING_EVENT_TYPE_START is used from the software channel
+ * with the MALI_PROFILING_EVENT_REASON_START_STOP_BOTTOM_HALF reason.
+ */
+typedef enum
+{
+	MALI_PROFILING_EVENT_DATA_CORE_GP0             =  1,
+	MALI_PROFILING_EVENT_DATA_CORE_PP0             =  5,
+	MALI_PROFILING_EVENT_DATA_CORE_PP1             =  6,
+	MALI_PROFILING_EVENT_DATA_CORE_PP2             =  7,
+	MALI_PROFILING_EVENT_DATA_CORE_PP3             =  8,
+	MALI_PROFILING_EVENT_DATA_CORE_PP4             =  9,
+	MALI_PROFILING_EVENT_DATA_CORE_PP5             = 10,
+	MALI_PROFILING_EVENT_DATA_CORE_PP6             = 11,
+	MALI_PROFILING_EVENT_DATA_CORE_PP7             = 12,
+} cinstr_profiling_event_data_core_t;
+
+#define MALI_PROFILING_MAKE_EVENT_DATA_CORE_GP(num) (MALI_PROFILING_EVENT_DATA_CORE_GP0 + (num))
+#define MALI_PROFILING_MAKE_EVENT_DATA_CORE_PP(num) (MALI_PROFILING_EVENT_DATA_CORE_PP0 + (num))
+
 
 #endif /*_MALI_UTGARD_PROFILING_EVENTS_H_*/
