@@ -1,15 +1,7 @@
-config GPU_MALI
-	tristate "ARM Mali 200/300/400 support"
-	depends on ARM
-	---help---
-	  This enables support for the ARM Mali 200/300/400 family of GPUs.
-	  Platform specific configuration is made in configuration files in the
-	  drivers/gpu/mali/src folder
-
-config MALI400
+menuconfig GPU_MALI
 	tristate "Mali-300/400/450 support"
 	depends on ARM
-	select DMA_SHARED_BUFFER
+	default y
 	---help---
 	  This enables support for the ARM Mali-300, Mali-400, and Mali-450
 	  GPUs.
@@ -17,49 +9,22 @@ config MALI400
 	  To compile this driver as a module, choose M here: the module will be
 	  called mali.
 
-config MALI400_DEBUG
-	bool "Enable debug in Mali driver"
-	depends on MALI400
-	---help---
-	  This enabled extra debug checks and messages in the Mali driver.
+choice
+	prompt "Select MALI VER"
+	depends on GPU_MALI
+	default MALI_VER_R3P2_01_REL_3
+	help
+	  Choose this option to select DDK version.
 
-config MALI400_PROFILING
-	bool "Enable Mali profiling"
-	depends on MALI400
-	select TRACEPOINTS
-	default y
-	---help---
-	  This enables gator profiling of Mali GPU events.
+config MALI_VER_R3P2_01_REL_3
+	bool "MALI Version r3p2-01rel3"
+	depends on GPU_MALI
+	help
+	  Say Y here to enable Mali version r3p2-01rel3
 
-config MALI400_INTERNAL_PROFILING
-	bool "Enable internal Mali profiling API"
-	depends on MALI400_PROFILING
-	default n
-	---help---
-	  This enables the internal legacy Mali profiling API.
+if MALI_VER_R3P2_01_REL_3
+	source "drivers/gpu/mali/mali400ko/driver/src/devicedrv/mali/Kconfig"
+	source "drivers/gpu/mali/mali400ko/driver/src/devicedrv/ump/Kconfig"
+endif
 
-config MALI400_UMP
-	bool "Enable UMP support"
-	depends on MALI400
-	---help---
-	  This enables support for the UMP memory sharing API in the Mali driver.
-
-config MALI_DMA_BUF_MAP_ON_ATTACH
-	bool "Map dma-buf attachments on attach"
-	depends on MALI400 && DMA_SHARED_BUFFER
-	default y
-	---help---
-	  This makes the Mali driver map dma-buf attachments after doing
-	  attach. If this is not set the dma-buf attachments will be mapped for
-	  every time the GPU need to access the buffer.
-
-	  Mapping for each access can cause lower performance.
-
-config MALI_SHARED_INTERRUPTS
-	bool "Support for shared interrupts"
-	depends on MALI400
-	default n
-	---help---
-	  Adds functionality required to properly support shared interrupts.  Without this support,
-	  the device driver will fail during insmod if it detects shared interrupts.  Works even if
-	  the GPU is not using shared interrupts, but can cause lower performance.
+endchoice
