@@ -102,6 +102,7 @@ static struct file_operations ump_fops =
 	.mmap    = ump_file_mmap
 };
 
+extern int map_errcode( _mali_osk_errcode_t err );
 
 /* This function is called by Linux to initialize this module.
  * All we do is initialize the UMP device driver.
@@ -375,22 +376,6 @@ static int ump_file_ioctl(struct inode *inode, struct file *filp, unsigned int c
 	}
 
 	return err;
-}
-
-int map_errcode( _mali_osk_errcode_t err )
-{
-    switch(err)
-    {
-        case _MALI_OSK_ERR_OK : return 0;
-        case _MALI_OSK_ERR_FAULT: return -EFAULT;
-        case _MALI_OSK_ERR_INVALID_FUNC: return -ENOTTY;
-        case _MALI_OSK_ERR_INVALID_ARGS: return -EINVAL;
-        case _MALI_OSK_ERR_NOMEM: return -ENOMEM;
-        case _MALI_OSK_ERR_TIMEOUT: return -ETIMEDOUT;
-        case _MALI_OSK_ERR_RESTARTSYSCALL: return -ERESTARTSYS;
-        case _MALI_OSK_ERR_ITEM_NOT_FOUND: return -ENOENT;
-        default: return -EFAULT;
-    }
 }
 
 /*
