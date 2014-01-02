@@ -652,5 +652,6 @@ source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
 source "drivers/misc/modem_audio/Kconfig"
+source "drivers/misc/kexec_mod/Kconfig"
 
 endif # MISC_DEVICES

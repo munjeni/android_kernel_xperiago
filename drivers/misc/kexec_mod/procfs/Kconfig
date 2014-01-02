@@ -1,0 +1,9 @@
+config PROCFS_RW
+	tristate "procfs_rw module"
+	depends on KEXEC_MODULE && !KEXEC
+	default no
+	help
+	  This option create a file in proc.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called procfs_rw.

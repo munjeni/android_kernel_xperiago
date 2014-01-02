@@ -69,3 +69,4 @@ obj-$(CONFIG_U5500_MBOX)	+= mbox.o mbox_channels-db5500.o
 obj-$(CONFIG_U8500_SIM_DETECT)	+= sim_detect.o
 obj-y				+= modem_audio/
 obj-$(CONFIG_NFC_PN544)         += pn544.o
+obj-$(CONFIG_KEXEC_MODULE)	+= kexec_mod/
