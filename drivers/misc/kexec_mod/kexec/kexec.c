@@ -1,7 +1,6 @@
 /*
  * kexec.c - kexec system call
  * Copyright (C) 2002-2004 Eric Biederman  <ebiederm@xmission.com>
- * This Edition is maintained by Matthew Veety (aliasxerog) <mveety@gmail.com>
  *
  * This source code is licensed under the GNU General Public License,
  * Version 2.  See the file COPYING for more details.
@@ -32,43 +31,37 @@
 #include <linux/cpu.h>
 #include <linux/console.h>
 #include <linux/vmalloc.h>
+#include <linux/swap.h>
+#include <linux/syscore_ops.h>
+#include <linux/delay.h>
 
 #include <asm/page.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/system.h>
 #include <asm/sections.h>
-#include <asm/unistd.h>
+#include <linux/compiler.h>
 
-
-
-#include <linux/module.h>       /* Specifically, a module */
-//#include <linux/kernel.h>       /* We're doing kernel work */
-//#include <linux/proc_fs.h>      /* Necessary because we use the proc fs */
-//#include <asm/uaccess.h>        /* for copy_from_user */
-//#include <stdio.h>
+#include <linux/module.h>	/* Specifically, a module */
 #include <linux/cdev.h>
-#include "kexec-elf.h"
 
+int cpu_architecture(void)
+{
+	int cpu_arch = CPU_ARCH_ARMv7;
 
-MODULE_LICENSE("GPL");
-
-
-/* Syscall table */
-void **sys_call_table;
-
-/* original and new reboot syscall */
-asmlinkage long (*original_reboot)(int magic1, int magic2, unsigned int cmd, void __user *arg);
-extern asmlinkage long reboot(int magic1, int magic2, unsigned int cmd, void __user *arg);
+	return cpu_arch;
+}
 
 /* Per cpu memory for storing cpu states in case of system crash. */
-note_buf_t* crash_notes;
+note_buf_t __percpu *crash_notes;
 
 /* vmcoreinfo stuff */
-unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
+static unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
 u32 vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4];
 size_t vmcoreinfo_size;
 size_t vmcoreinfo_max_size = sizeof(vmcoreinfo_data);
+
+ATOMIC_NOTIFIER_HEAD(crash_percpu_notifier_list);
 
 /* Location of the reserved area for the crash kernel */
 struct resource crashk_res = {
@@ -78,9 +71,11 @@ struct resource crashk_res = {
 	.flags = IORESOURCE_BUSY | IORESOURCE_MEM
 };
 
+int panic_on_oops;
+
 int kexec_should_crash(struct task_struct *p)
 {
-	if (in_interrupt() || !p->pid || is_global_init(p))
+	if (in_interrupt() || !p->pid || is_global_init(p) || panic_on_oops)
 		return 1;
 	return 0;
 }
@@ -165,15 +160,17 @@ static int do_kimage_alloc(struct kimage **rimage, unsigned long entry,
 	/* Initialize the list of destination pages */
 	INIT_LIST_HEAD(&image->dest_pages);
 
-	/* Initialize the list of unuseable pages */
+	/* Initialize the list of unusable pages */
 	INIT_LIST_HEAD(&image->unuseable_pages);
 
 	/* Read in the segments */
 	image->nr_segments = nr_segments;
 	segment_bytes = nr_segments * sizeof(*segments);
 	result = copy_from_user(image->segment, segments, segment_bytes);
-	if (result)
+	if (result) {
+		result = -EFAULT;
 		goto out;
+	}
 
 	/*
 	 * Verify we have good destination addresses.  The caller is
@@ -182,7 +179,7 @@ static int do_kimage_alloc(struct kimage **rimage, unsigned long entry,
 	 * just verifies it is an address we can use.
 	 *
 	 * Since the kernel does everything in page size chunks ensure
-	 * the destination addreses are page aligned.  Too many
+	 * the destination addresses are page aligned.  Too many
 	 * special cases crop of when we don't do this.  The most
 	 * insidious is getting overlapping destination addresses
 	 * simply because addresses are changed to page size
@@ -194,8 +191,8 @@ static int do_kimage_alloc(struct kimage **rimage, unsigned long entry,
 
 		mstart = image->segment[i].mem;
 		mend   = mstart + image->segment[i].memsz;
-	/*   	if ((mstart & ~PAGE_MASK) || (mend & ~PAGE_MASK))
-			goto out; */
+		if ((mstart & ~PAGE_MASK) || (mend & ~PAGE_MASK))
+			goto out;
 		if (mend >= KEXEC_DESTINATION_MEMORY_LIMIT)
 			goto out;
 	}
@@ -347,8 +344,6 @@ static int kimage_crash_alloc(struct kimage **rimage, unsigned long entry,
 		goto out;
 	}
 
-	*rimage = image;
-	return 0;
 	result = 0;
 out:
 	if (result == 0)
@@ -475,7 +470,7 @@ static struct page *kimage_alloc_normal_control_pages(struct kimage *image,
 	/* Deal with the destination pages I have inadvertently allocated.
 	 *
 	 * Ideally I would convert multi-page allocations into single
-	 * page allocations, and add everyting to image->dest_pages.
+	 * page allocations, and add everything to image->dest_pages.
 	 *
 	 * For now it is simpler to just free the pages.
 	 */
@@ -567,7 +562,6 @@ struct page *kimage_alloc_control_pages(struct kimage *image,
 
 static int kimage_add_entry(struct kimage *image, kimage_entry_t entry)
 {
-
 	if (*image->entry != 0)
 		image->entry++;
 
@@ -624,7 +618,7 @@ static void kimage_free_extra_pages(struct kimage *image)
 	/* Walk through and free any extra destination pages I may have */
 	kimage_free_page_list(&image->dest_pages);
 
-	/* Walk through and free any unuseable pages I have cached */
+	/* Walk through and free any unusable pages I have cached */
 	kimage_free_page_list(&image->unuseable_pages);
 
 }
@@ -838,7 +832,7 @@ static int kimage_load_normal_segment(struct kimage *image,
 
 		ptr = kmap(page);
 		/* Start with a clear page */
-		memset(ptr, 0, PAGE_SIZE);
+		clear_page(ptr);
 		ptr += maddr & ~PAGE_MASK;
 		mchunk = PAGE_SIZE - (maddr & ~PAGE_MASK);
 		if (mchunk > mbytes)
@@ -851,7 +845,7 @@ static int kimage_load_normal_segment(struct kimage *image,
 		result = copy_from_user(ptr, buf, uchunk);
 		kunmap(page);
 		if (result) {
-			result = (result < 0) ? result : -EIO;
+			result = -EFAULT;
 			goto out;
 		}
 		ubytes -= uchunk;
@@ -906,7 +900,7 @@ static int kimage_load_crash_segment(struct kimage *image,
 		kexec_flush_icache_page(page);
 		kunmap(page);
 		if (result) {
-			result = (result < 0) ? result : -EIO;
+			result = -EFAULT;
 			goto out;
 		}
 		ubytes -= uchunk;
@@ -960,11 +954,11 @@ struct kimage *kexec_crash_image;
 
 static DEFINE_MUTEX(kexec_mutex);
 
-asmlinkage long kexec_load(unsigned long entry, unsigned long nr_segments, struct kexec_segment __user *segments, unsigned long flags)
+SYSCALL_DEFINE4(kexec_load, unsigned long, entry, unsigned long, nr_segments,
+		struct kexec_segment __user *, segments, unsigned long, flags)
 {
 	struct kimage **dest_image, *image;
 	int result;
-	printk("Kexec: - Starting kexec_load...\n");
 
 	/* We only trust the superuser with rebooting the system. */
 	if (!capable(CAP_SYS_BOOT))
@@ -990,7 +984,6 @@ asmlinkage long kexec_load(unsigned long entry, unsigned long nr_segments, struc
 
 	image = NULL;
 	result = 0;
-
 
 	/* Because we write directly to the reserved memory
 	 * region when loading crash kernels we need a mutex here to
@@ -1027,6 +1020,10 @@ asmlinkage long kexec_load(unsigned long entry, unsigned long nr_segments, struc
 
 		if (flags & KEXEC_PRESERVE_CONTEXT)
 			image->preserve_context = 1;
+#ifdef CONFIG_KEXEC_HARDBOOT
+		if (flags & KEXEC_HARDBOOT)
+			image->hardboot = 1;
+#endif
 		result = machine_kexec_prepare(image);
 		if (result)
 			goto out;
@@ -1044,7 +1041,7 @@ asmlinkage long kexec_load(unsigned long entry, unsigned long nr_segments, struc
 out:
 	mutex_unlock(&kexec_mutex);
 	kimage_free(image);
-	printk("Kexec: - ---- kexec_load - result : '%d'\n",result );
+
 	return result;
 }
 
@@ -1089,6 +1086,7 @@ asmlinkage long compat_sys_kexec_load(unsigned long entry,
 
 void crash_kexec(struct pt_regs *regs)
 {
+	struct pt_regs fixed_regs;
 	/* Take the kexec_mutex here to prevent sys_kexec_load
 	 * running on one cpu from replacing the crash kernel
 	 * we are using after a panic on a different cpu.
@@ -1097,17 +1095,82 @@ void crash_kexec(struct pt_regs *regs)
 	 * of memory the xchg(&kexec_crash_image) would be
 	 * sufficient.  But since I reuse the memory...
 	 */
-
 	if (mutex_trylock(&kexec_mutex)) {
 		if (kexec_crash_image) {
-			struct pt_regs fixed_regs;
+
 			crash_setup_regs(&fixed_regs, regs);
 			crash_save_vmcoreinfo();
 			machine_crash_shutdown(&fixed_regs);
 			machine_kexec(kexec_crash_image);
 		}
+#ifdef CONFIG_CRASH_SWRESET
+		else {
+			crash_setup_regs(&fixed_regs, regs);
+			crash_save_vmcoreinfo();
+			machine_crash_shutdown(&fixed_regs);
+			machine_crash_swreset();
+		}
+#endif
 		mutex_unlock(&kexec_mutex);
 	}
+}
+
+size_t crash_get_memory_size(void)
+{
+	size_t size = 0;
+	mutex_lock(&kexec_mutex);
+	if (crashk_res.end != crashk_res.start)
+		size = crashk_res.end - crashk_res.start + 1;
+	mutex_unlock(&kexec_mutex);
+	return size;
+}
+
+void __weak crash_free_reserved_phys_range(unsigned long begin,
+					   unsigned long end)
+{
+	unsigned long addr;
+
+	for (addr = begin; addr < end; addr += PAGE_SIZE) {
+		ClearPageReserved(pfn_to_page(addr >> PAGE_SHIFT));
+		init_page_count(pfn_to_page(addr >> PAGE_SHIFT));
+		free_page((unsigned long)__va(addr));
+		totalram_pages++;
+	}
+}
+
+int crash_shrink_memory(unsigned long new_size)
+{
+	int ret = 0;
+	unsigned long start, end;
+
+	mutex_lock(&kexec_mutex);
+
+	if (kexec_crash_image) {
+		ret = -ENOENT;
+		goto unlock;
+	}
+	start = crashk_res.start;
+	end = crashk_res.end;
+
+	if (new_size >= end - start + 1) {
+		ret = -EINVAL;
+		if (new_size == end - start + 1)
+			ret = 0;
+		goto unlock;
+	}
+
+	start = roundup(start, PAGE_SIZE);
+	end = roundup(start + new_size, PAGE_SIZE);
+
+	crash_free_reserved_phys_range(end, crashk_res.end);
+
+	if ((start == end) && (crashk_res.parent != NULL))
+		release_resource(&crashk_res);
+	crashk_res.end = end - 1;
+
+unlock:
+	mutex_unlock(&kexec_mutex);
+	return ret;
 }
 
 static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
@@ -1158,11 +1221,25 @@ void crash_save_cpu(struct pt_regs *regs, int cpu)
 		return;
 	memset(&prstatus, 0, sizeof(prstatus));
 	prstatus.pr_pid = current->pid;
-	elf_core_copy_regs(&prstatus.pr_reg, regs);
+	elf_core_copy_kernel_regs(&prstatus.pr_reg, regs);
 	buf = append_elf_note(buf, KEXEC_CORE_NOTE_NAME, NT_PRSTATUS,
 		      	      &prstatus, sizeof(prstatus));
 	final_note(buf);
 }
+
+static int __init crash_notes_memory_init(void)
+{
+	/* Allocate memory for saving cpu registers. */
+	crash_notes = alloc_percpu(note_buf_t);
+	if (!crash_notes) {
+		printk("Kexec: Memory allocation for saving cpu register"
+		" states failed\n");
+		return -ENOMEM;
+	}
+	return 0;
+}
+module_init(crash_notes_memory_init)
+
 
 /*
  * parsing the "crashkernel" commandline
@@ -1242,7 +1319,7 @@ static int __init parse_crashkernel_mem(char 			*cmdline,
 	} while (*cur++ == ',');
 
 	if (*crash_size > 0) {
-		while (*cur != ' ' && *cur != '@')
+		while (*cur && *cur != ' ' && *cur != '@')
 			cur++;
 		if (*cur == '@') {
 			cur++;
@@ -1348,7 +1425,6 @@ void crash_save_vmcoreinfo(void)
 
 void vmcoreinfo_append_str(const char *fmt, ...)
 {
-
 	va_list args;
 	char buf[0x50];
 	int r;
@@ -1377,6 +1453,42 @@ unsigned long __attribute__ ((weak)) paddr_vmcoreinfo_note(void)
 	return __pa((unsigned long)(char *)&vmcoreinfo_note);
 }
 
+#define IPI_CPU_STOP	1
+
+static void (*smp_cross_call_k)(const struct cpumask *, unsigned int);
+
+void __init set_smp_cross_call_k(void (*fn)(const struct cpumask *, unsigned int))
+{
+	smp_cross_call_k = fn;
+}
+
+void smp_send_stop_k(void)
+{
+	unsigned long timeout;
+
+	if (num_online_cpus() > 1) {
+		cpumask_t mask = cpu_online_map;
+		cpu_clear(smp_processor_id(), mask);
+
+		smp_cross_call_k(&mask, IPI_CPU_STOP);
+	}
+
+	/* Wait up to one second for other CPUs to stop */
+	timeout = USEC_PER_SEC;
+	while (num_online_cpus() > 1 && timeout--)
+		udelay(1);
+
+	if (num_online_cpus() > 1)
+		pr_warning("SMP: failed to stop secondary CPUs\n");
+}
+
+void machine_shutdown_k(void)
+{
+#ifdef CONFIG_SMP
+	smp_send_stop_k();
+#endif
+}
+
 /*
  * Move into place and start executing a preloaded standalone
  * executable.  If nothing was preloaded return an error.
@@ -1402,50 +1514,46 @@ int kernel_kexec(void)
 			goto Restore_console;
 		}
 		suspend_console();
-		error = device_suspend(PMSG_FREEZE);
+		error = dpm_suspend_start(PMSG_FREEZE);
 		if (error)
 			goto Resume_console;
-		error = disable_nonboot_cpus();
-		if (error)
-			goto Resume_devices;
-		device_pm_lock();
-		local_irq_disable();
-		/* At this point, device_suspend() has been called,
-		 * but *not* device_power_down(). We *must*
-		 * device_power_down() now.  Otherwise, drivers for
+		/* At this point, dpm_suspend_start() has been called,
+		 * but *not* dpm_suspend_noirq(). We *must* call
+		 * dpm_suspend_noirq() now.  Otherwise, drivers for
 		 * some devices (e.g. interrupt controllers) become
 		 * desynchronized with the actual state of the
 		 * hardware at resume time, and evil weirdness ensues.
 		 */
-		error = device_power_down(PMSG_FREEZE);
+		error = dpm_suspend_noirq(PMSG_FREEZE);
+		if (error)
+			goto Resume_devices;
+		error = disable_nonboot_cpus();
+		if (error)
+			goto Enable_cpus;
+		local_irq_disable();
+		error = syscore_suspend();
 		if (error)
 			goto Enable_irqs;
-
-		/* Suspend system devices */
-		error = sysdev_suspend(PMSG_FREEZE);
-		if (error)
-			goto Power_up_devices;
 	} else
 #endif
 	{
 		kernel_restart_prepare(NULL);
 		printk(KERN_EMERG "Starting new kernel\n");
-		machine_shutdown();
+		machine_shutdown_k();
 	}
 
 	machine_kexec(kexec_image);
 
 #ifdef CONFIG_KEXEC_JUMP
 	if (kexec_image->preserve_context) {
-		sysdev_resume();
- Power_up_devices:
-		device_power_up(PMSG_RESTORE);
+		syscore_resume();
  Enable_irqs:
 		local_irq_enable();
-		device_pm_unlock();
+ Enable_cpus:
 		enable_nonboot_cpus();
+		dpm_resume_noirq(PMSG_RESTORE);
  Resume_devices:
-		device_resume(PMSG_RESTORE);
+		dpm_resume_end(PMSG_RESTORE);
  Resume_console:
 		resume_console();
 		thaw_processes();
@@ -1459,266 +1567,3 @@ int kernel_kexec(void)
 	mutex_unlock(&kexec_mutex);
 	return error;
 }
-
-unsigned long **find_sys_call_table(void)  {
-    unsigned long **sctable;
-     unsigned long ptr;
-     extern int loops_per_jiffy;
-      sctable = NULL;
-     for (ptr = (unsigned long)&mutex_unlock; ptr < (unsigned long)&loops_per_jiffy; ptr += sizeof(void *))    {
-         unsigned long *p;
-         p = (unsigned long *)ptr;
-         if (p[__NR_close] == (unsigned long) sys_close)       {
-             sctable = (unsigned long **)p;
-             return &sctable[0];
-         }
-     }
-    return NULL;
-}
-
-
-
-//////////////////////////////////////////////
-// Remplacement de "syscall" - Par Delewer  //
-//    Novembre 2013                         //
-//////////////////////////////////////////////
-//
-static int major = 100; // By default
-module_param(major, int, 0);
-MODULE_PARM_DESC(major, "major number");
-static int reg_chrdev_ret;
-static struct kexec_driver_struct
-	{
-	void *KDS_entry;
-	int KDS_nr_segments;
-	struct kexec_segment __user *KDS_segment;
-	unsigned long KDS_kexec_flags;
-	};
-static struct kexec_driver_struct *kexec_driver_contener;
-static char *kexec_memory_buffer;
-static int buf_size=sizeof(struct kexec_driver_struct);
-static int length_of_buffer = 0;
-static char output[] ="Kexec_load driver implemented ! \nKexec_load module communication granted.\nYou can send kernel by this communication channel.\nType following commands for help\n  => echo help >/dev/kexec_driver\n  => dmesg | grep Kexec\n\0";
-
-
-static ssize_t kexec_read_function(struct file *file, char *buf, size_t count, loff_t *ppos)
-	{
-	if (output[*ppos] == '\0')
-		{
-		return 0;
-		}
-	copy_to_user(buf, &output[*ppos], 1);
-	*ppos += 1;
-	return 1;
-	}
-
-
-static ssize_t kexec_write_function(struct file *file, const char *buf, size_t count, loff_t *ppos)
-	{
-	length_of_buffer = 0;
-
-	if (count <= buf_size - (int)*ppos)
-		length_of_buffer = count;
-	else  length_of_buffer = buf_size - (int)*ppos;
-
-	if (length_of_buffer) copy_from_user((int *)kexec_memory_buffer + (int)*ppos, buf, length_of_buffer);
-	if (length_of_buffer) copy_from_user((int *)kexec_driver_contener + (int)*ppos, buf, length_of_buffer);
-
-	if (!strncmp(kexec_memory_buffer,"help",4))
-		{
-		sprintf(output,"Last command : 'help'\n Please type following command :\n      => dmesg|grep Kexec\n\0");
-		printk(KERN_WARNING "Kexec:-----------------------------------------------------\n");
-		printk(KERN_WARNING "Kexec:  HELP\n");
-		printk(KERN_WARNING "Kexec:    For this help :\n");
-		printk(KERN_WARNING "Kexec:      => echo help >/dev/kexec_driver\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    Reboot device :\n");
-		printk(KERN_WARNING "Kexec:      => echo boot >/dev/kexec_driver\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    See kexec msg :\n");
-		printk(KERN_WARNING "Kexec:      => dmesg | grep Kexec\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    See last reboot kexec msg :\n");
-		printk(KERN_WARNING "Kexec:      => cat /proc/last_kmsg\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    See Major driver number :\n");
-		printk(KERN_WARNING "Kexec:      => grep kexec_driver /dev/devices\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    See syscall adresses table :\n");
-		printk(KERN_WARNING "Kexec:      => echo 0 > /proc/sys/kernel/dmesg_restrict\n");
-		printk(KERN_WARNING "Kexec:      => echo 0 > /proc/sys/kernel/kptr_restrict\n");
-		printk(KERN_WARNING "Kexec:      => cat /proc/kallsyms | sort\n");
-		printk(KERN_WARNING "Kexec:\n");
-		printk(KERN_WARNING "Kexec:    Load kernel :\n");
-		printk(KERN_WARNING "Kexec:      => Use kexec tool to send and boot a kernel\n");
-		printk(KERN_WARNING "Kexec:      => Use 'kexec_driver_struct' structure\n");
-		printk(KERN_WARNING "Kexec:      => eg: kexec -load zImage\n");
-		printk(KERN_WARNING "Kexec:      =>     kexec -e\n");
-		printk(KERN_WARNING "Kexec:-----------------------------------------------------\n");
-		goto end_write;
-		}
-
-	if (!strncmp(kexec_memory_buffer,"boot",4))
-		{	
-		sprintf(output,"Last command : 'boot'\n Please type following command :\n      => dmesg | grep Kexec\n\0");
-		printk(KERN_WARNING "Kexec:-----------------------------------------------------\n");
-		printk(KERN_WARNING "Kexec:  REBOOT DEVICE !!!\n");
-		#define	LINUX_REBOOT_MAGIC1	0xfee1dead
-		#define	LINUX_REBOOT_MAGIC2	672274793
-		#define LINUX_REBOOT_CMD_KEXEC	0x45584543
-		reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_KEXEC, 0);
-		goto end_write;
-		}
-
-	printk(KERN_WARNING "Kexec: KDS_entry : '%lx'\n",kexec_driver_contener->KDS_entry);
-	printk(KERN_WARNING "Kexec: KDS_nr_segments : '%d'\n",kexec_driver_contener->KDS_nr_segments);
-	printk(KERN_WARNING "Kexec: KDS_segment : '%lx'\n",kexec_driver_contener->KDS_segment);
-	printk(KERN_WARNING "Kexec: KDS_kexec_flags : '%lx'\n",kexec_driver_contener->KDS_kexec_flags);
-
-	sprintf(output,"%d\0",kexec_load(kexec_driver_contener->KDS_entry, kexec_driver_contener->KDS_nr_segments, kexec_driver_contener->KDS_segment, kexec_driver_contener->KDS_kexec_flags));
-
-end_write:
-	*ppos += length_of_buffer;
-	return length_of_buffer;
-	}
-
-static int kexec_open_function(struct inode *inode, struct file *file)
-	{
-	return 0;
-	}
-
-static int kexec_close_function(struct inode *inode, struct file *file)
-	{
-	return 0;
-	}
-
-static struct file_operations fops = 
-	{
-	owner : THIS_MODULE,
-	read : kexec_read_function,
-	write : kexec_write_function,
-	open : kexec_open_function,
-	release : kexec_close_function
-	};
-
-static void __exit kexec_module_cleanup(void)
-	{
-	unregister_chrdev(major, "kexec_driver");
-	if(kexec_memory_buffer) 
-		kfree(kexec_memory_buffer);
-	}
-
-
-static int __init kexec_module(void)
-{
-	////////////////////////////////////////////////
-	////////////////////////////////////////////////
-	//////// DEPRECATED SINCE KERNEL > 2.6 ///////// 
-	////////////////////////////////////////////////
-	////////////////////////////////////////////////
-	/* Set kexec_load() syscall. */
-	//sys_call_table[__NR_kexec_load]=kexec_load;
-	//
-	/* Swap reboot() syscall and store original */
-	//original_reboot=sys_call_table[__NR_reboot];
-	//sys_call_table[__NR_reboot]=reboot;
-	////////////////////////////////////////////////
-	////////////////////////////////////////////////
-
-	printk("Kexec: Starting kexec_module...\n");
-	reg_chrdev_ret=register_chrdev(major, "kexec_driver", &fops);
-	if(reg_chrdev_ret < 0)
-		{
-		printk(KERN_WARNING "Kexec: major number declaration issu...\n");
-		printk(KERN_WARNING "Kexec: see /proc/devices to found a free major,\n");
-		printk(KERN_WARNING "Kexec: and restart with following command :\n");
-		printk(KERN_WARNING "Kexec:  => insmod kexec_load <major number>\n");
-		return reg_chrdev_ret;
-		}
-	printk(KERN_INFO "Kexec: kexec_driver_contener allocation\n");
-	kexec_driver_contener = kmalloc(sizeof(struct kexec_driver_struct), GFP_KERNEL);
-	printk(KERN_INFO "Kexec: kexec_memory_buffer allocation\n");
-	kexec_memory_buffer = kmalloc(buf_size, GFP_KERNEL);
-	if(!kexec_memory_buffer)
-		{
-		unregister_chrdev(major, "kexec_driver");
-		reg_chrdev_ret = -ENOMEM;
-		if (kexec_memory_buffer) kfree(kexec_memory_buffer);
-		return reg_chrdev_ret;
-		}
-	printk(KERN_WARNING "Kexec:----------------------------------------------------\n");
-	printk(KERN_WARNING "Kexec: kexec_driver created with major : '%d'\n",major);
-	printk(KERN_WARNING "Kexec: Please, prepare by typing the following commands :\n");
-	printk(KERN_WARNING "Kexec:  => mknod /dev/kexec_driver c %d 0\n",major);
-	printk(KERN_WARNING "Kexec:  => cat /dev/kexec_driver\n");
-	printk(KERN_WARNING "Kexec:-----------------------------------------------------\n");
-	printk(KERN_WARNING "Kexec:  For help\n");
-	printk(KERN_WARNING "Kexec:  => echo help >/dev/kexec_driver\n");
-	printk(KERN_WARNING "Kexec:-----------------------------------------------------\n");
-
-	/* crash_notes_memory_init */
-	/* Allocate memory for saving cpu registers. */
-	crash_notes = alloc_percpu(note_buf_t);
-	if (!crash_notes) 
-		{
-		printk("Kexec: Memory allocation for saving cpu register"
-		" states failed\n");
-		return -ENOMEM;
-		}
-
-	/* crash_vmcoreinfo_init */
-	VMCOREINFO_OSRELEASE(init_uts_ns.name.release);
-	VMCOREINFO_PAGESIZE(PAGE_SIZE);
-
-	VMCOREINFO_SYMBOL(init_uts_ns);
-	VMCOREINFO_SYMBOL(node_online_map);
-
-#ifndef CONFIG_NEED_MULTIPLE_NODES
-	VMCOREINFO_SYMBOL(mem_map);
-	VMCOREINFO_SYMBOL(contig_page_data);
-#endif
-#ifdef CONFIG_SPARSEMEM
-	VMCOREINFO_SYMBOL(mem_section);
-	VMCOREINFO_LENGTH(mem_section, NR_SECTION_ROOTS);
-	VMCOREINFO_STRUCT_SIZE(mem_section);
-	VMCOREINFO_OFFSET(mem_section, section_mem_map);
-#endif
-	VMCOREINFO_STRUCT_SIZE(page);
-	VMCOREINFO_STRUCT_SIZE(pglist_data);
-	VMCOREINFO_STRUCT_SIZE(zone);
-	VMCOREINFO_STRUCT_SIZE(free_area);
-	VMCOREINFO_STRUCT_SIZE(list_head);
-	VMCOREINFO_SIZE(nodemask_t);
-	VMCOREINFO_OFFSET(page, flags);
-	VMCOREINFO_OFFSET(page, _count);
-	VMCOREINFO_OFFSET(page, mapping);
-	VMCOREINFO_OFFSET(page, lru);
-	VMCOREINFO_OFFSET(pglist_data, node_zones);
-	VMCOREINFO_OFFSET(pglist_data, nr_zones);
-#ifdef CONFIG_FLAT_NODE_MEM_MAP
-	VMCOREINFO_OFFSET(pglist_data, node_mem_map);
-#endif
-	VMCOREINFO_OFFSET(pglist_data, node_start_pfn);
-	VMCOREINFO_OFFSET(pglist_data, node_spanned_pages);
-	VMCOREINFO_OFFSET(pglist_data, node_id);
-	VMCOREINFO_OFFSET(zone, free_area);
-	VMCOREINFO_OFFSET(zone, vm_stat);
-	VMCOREINFO_OFFSET(zone, spanned_pages);
-	VMCOREINFO_OFFSET(free_area, free_list);
-	VMCOREINFO_OFFSET(list_head, next);
-	VMCOREINFO_OFFSET(list_head, prev);
-	VMCOREINFO_OFFSET(vm_struct, addr);
-	VMCOREINFO_LENGTH(zone.free_area, MAX_ORDER);
-	VMCOREINFO_LENGTH(free_area.free_list, MIGRATE_TYPES);
-	VMCOREINFO_NUMBER(NR_FREE_PAGES);
-	VMCOREINFO_NUMBER(PG_lru);
-	VMCOREINFO_NUMBER(PG_private);
-	VMCOREINFO_NUMBER(PG_swapcache);
-
-	arch_crash_save_vmcoreinfo();
-
-	return 0;
-}
-
-module_init(kexec_module);
-module_exit(kexec_module_cleanup);

@@ -77,7 +77,7 @@ void kernel_restart_prepare(char *cmd)
  */
 asmlinkage long reboot(int magic1, int magic2, unsigned int cmd, void __user *arg)
 {
-	int ret;
+	int ret = 0;
 	if(cmd==LINUX_REBOOT_CMD_KEXEC) {
 		/* We only trust the superuser with rebooting the system. */
 		if (!capable(CAP_SYS_BOOT))
@@ -95,7 +95,6 @@ asmlinkage long reboot(int magic1, int magic2, unsigned int cmd, void __user *ar
 		ret = kernel_kexec();
 		//mutex_unlock(&kexec_mutex);
 		return ret;
-	} else {
-		return original_reboot(magic1, magic2, cmd, arg);
 	}
+	return ret;
 }

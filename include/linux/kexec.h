@@ -1,7 +1,7 @@
 #ifndef LINUX_KEXEC_H
 #define LINUX_KEXEC_H
 
-#ifdef CONFIG_KEXEC
+#if defined(CONFIG_KEXEC) || defined(CONFIG_KEXEC_MODULE)
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/linkage.h>

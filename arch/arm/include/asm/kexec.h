@@ -1,7 +1,7 @@
 #ifndef _ARM_KEXEC_H
 #define _ARM_KEXEC_H
 
-#ifdef CONFIG_KEXEC
+#if defined(CONFIG_KEXEC) || defined(CONFIG_KEXEC_MODULE)
 
 /* Maximum physical address we can use pages from */
 #define KEXEC_SOURCE_MEMORY_LIMIT (-1UL)

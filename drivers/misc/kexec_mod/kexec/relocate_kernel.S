@@ -4,12 +4,22 @@
 
 #include <asm/kexec.h>
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/memory.h>
+#endif
+
 	.globl relocate_new_kernel
 relocate_new_kernel:
 
 	ldr	r0,kexec_indirection_page
 	ldr	r1,kexec_start_address
 
+	/*
+	 * If there is no indirection page (we are doing crashdumps)
+	 * skip any relocation.
+	 */
+	cmp	r0, #0
+	beq	2f
 
 0:	/* top, read another word for the indirection page */
 	ldr	r3, [r0],#4
@@ -46,12 +56,54 @@ relocate_new_kernel:
 	b 0b
 
 2:
+#ifdef CONFIG_KEXEC_HARDBOOT
+	ldr	r0, kexec_hardboot
+	teq	r0, #0
+	bne	hardboot
+#endif
+
 	/* Jump to relocated kernel */
 	mov lr,r1
 	mov r0,#0
 	ldr r1,kexec_mach_type
 	ldr r2,kexec_boot_atags
 	mov pc,lr
+
+#ifdef CONFIG_KEXEC_HARDBOOT
+hardboot:
+	/* Stash boot arguments in hardboot page:
+	 *  0: KEXEC_HB_PAGE_MAGIC
+	 *  4: kexec_start_address
+	 *  8: kexec_mach_type
+	 * 12: kexec_boot_atags
+	 */
+	ldr	r0, =KEXEC_HB_PAGE_ADDR
+	str	r1, [r0, #4]
+	ldr	r1, kexec_mach_type
+	str	r1, [r0, #8]
+	ldr	r1, kexec_boot_atags
+	str	r1, [r0, #12]
+	ldr	r1, =KEXEC_HB_PAGE_MAGIC
+	str	r1, [r0]
+
+/*
+ * Munjeni @ XDA 2013:
+ * Soft reboot function for Xperia Go and Sola
+ */
+#if defined(CONFIG_MACH_U8500_LOTUS) || defined(CONFIG_MACH_U8500_PEPPER) || defined(CONFIG_MACH_U8500_KUMQUAT) || defined(CONFIG_MACH_U8500_NYPON)
+	ldr r0,soft_reset_addr
+	mov r1, #1
+	str r1, [r0]
+
+soft_reset_addr:
+	.word 0x80157228
+#else
+#error "No reboot method defined for hardboot."
+#endif
+
+	.ltorg
+#endif
+	.align
 
 	.globl kexec_start_address
 kexec_start_address:
@@ -69,6 +121,12 @@ kexec_mach_type:
 	.globl kexec_boot_atags
 kexec_boot_atags:
 	.long	0x0
+
+#ifdef CONFIG_KEXEC_HARDBOOT
+	.globl kexec_hardboot
+kexec_hardboot:
+	.long	0x0
+#endif
 
 relocate_new_kernel_end:
 

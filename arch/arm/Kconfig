@@ -1931,7 +1931,7 @@ config ATAGS_PROC
 
 config KEXEC_HARDBOOT
 	bool "Support hard booting to a kexec kernel"
-	depends on KEXEC
+	depends on KEXEC || KEXEC_MODULE
 	help
 	  Allows hard booting (i.e., with a full hardware reboot) to a kernel
 	  previously loaded in memory by kexec.  This works around the problem of
