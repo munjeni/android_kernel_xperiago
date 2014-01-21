@@ -545,6 +545,7 @@ config MAC80211_DRIVER_API_TRACER
 endif # MAC80211_DEBUG_MENU
 
 config CW1200
+	tristate "CW1200 WLAN support"
        depends on MAC80211 && CFG80211
        help
 
