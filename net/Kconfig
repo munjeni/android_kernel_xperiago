@@ -545,9 +545,7 @@ config MAC80211_DRIVER_API_TRACER
 endif # MAC80211_DEBUG_MENU
 
 config CW1200
-       tristate "CW1200 WLAN support"
-       select MAC80211
-       select CFG80211
+       depends on MAC80211 && CFG80211
        help
 
          This is an experimental driver for the cw1200 chip-set.

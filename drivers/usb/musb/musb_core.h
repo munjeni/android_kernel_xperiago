@@ -501,7 +501,7 @@ struct musb {
 	struct usb_gadget	g;			/* the gadget */
 	struct usb_gadget_driver *gadget_driver;	/* its driver */
 #endif
-
+#if 0
 	/*
 	 * FIXME: Remove this flag.
 	 *
@@ -514,7 +514,7 @@ struct musb {
 	 * buffering until we get it working.
 	 */
 	unsigned                double_buffer_not_ok:1 __deprecated;
-
+#endif
 	struct musb_hdrc_config	*config;
 
 #ifdef MUSB_CONFIG_PROC_FS

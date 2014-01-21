@@ -34,7 +34,9 @@
 
 #define DEFAULT_DEVCTL 0x81
 static void ux500_musb_set_vbus(struct musb *musb, int is_on);
+#if 0
 static u8 ulpi_read_register(struct musb *musb, u8 address);
+#endif
 static u8 ulpi_write_register(struct musb *musb, u8 address, u8 data);
 static spinlock_t musb_ulpi_spinlock;
 
@@ -52,6 +54,7 @@ static bool context_stored;
 struct musb *_musb;
 static struct wake_lock ux500_usb_wakelock;
 
+#if 0
 /**
  * ulpi_read_register() - Read the usb register from address writing into ULPI
  * @musb: struct musb pointer.
@@ -106,6 +109,7 @@ static u8 ulpi_read_register(struct musb *musb, u8 address)
 
 	return val;
 }
+#endif
 
 /**
  * ulpi_write_register() - Write to a usb phy's ULPI register

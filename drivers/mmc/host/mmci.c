@@ -1232,7 +1232,7 @@ static void mmci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		timeout_ms =
 			((mrq->data->timeout_ns / NSEC_PER_MSEC) *
 			mrq->data->blocks) / 3;
-	timeout_ms = max(timeout_ms, 2*MSEC_PER_SEC);
+	timeout_ms = max(timeout_ms, (unsigned long)(2*MSEC_PER_SEC));
 	mod_timer(&host->req_expiry, jiffies + msecs_to_jiffies(timeout_ms));
 
 	spin_unlock_irqrestore(&host->lock, flags);
@@ -1383,7 +1383,7 @@ static irqreturn_t mmci_cd_irq(int irq, void *dev_id)
 static void mmci_request_expiry(unsigned long arg)
 {
 	struct mmci_host *host = (struct mmci_host *)arg;
-	extern void ste_dma40_dump();
+	extern void ste_dma40_dump(void);
 
 	dev_err(mmc_dev(host->mmc), "MMC request expiry, sumping registers\n");
 	dump_mmci_regs(host->mmc);

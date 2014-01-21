@@ -17,7 +17,7 @@
 #include <linux/mfd/abx500/ab8500-pwmleds.h>
 #include "board-mop500-bm.h"
 
-
+#if 0
 /* Discharge curve for 10mA load for Lowe batteries */
 static struct v_to_cap cap_tbl_A_Lowe[] = {
 	{4179,	100},
@@ -42,6 +42,7 @@ static struct v_to_cap cap_tbl_A_Lowe[] = {
 	{3637,	  5},
 	{3251,	  0},
 };
+#endif
 
 /* 100mA discharge curve at 23degC */
 static struct v_to_cap cap_tbl_A_Lowe_100mA[] = {
@@ -324,6 +325,8 @@ static struct v_to_cap cap_tbl_B[] = {
 	{3250,	  0},
 };
 #endif
+
+#if 0
 static struct v_to_cap cap_tbl[] = {
 	{4186,	100},
 	{4163,	 99},
@@ -350,6 +353,7 @@ static struct v_to_cap cap_tbl[] = {
 	{3317,	  1},
 	{3094,	  0},
 };
+#endif
 
 /*
  * Note that the res_to_temp table must be strictly sorted by falling

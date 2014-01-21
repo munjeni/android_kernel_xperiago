@@ -126,6 +126,7 @@ struct menu_device {
 static int tune_multiplier = 1024;
 static int forced_state;
 
+#if 0
 #define LOAD_INT(x) ((x) >> FSHIFT)
 #define LOAD_FRAC(x) LOAD_INT(((x) & (FIXED_1-1)) * 100)
 
@@ -136,6 +137,7 @@ static int get_loadavg(void)
 
 	return LOAD_INT(this) * 10 + LOAD_FRAC(this) / 10;
 }
+#endif
 
 static inline int which_bucket(unsigned int duration)
 {
@@ -178,13 +180,14 @@ static inline int performance_multiplier(void)
 		return tune_multiplier;
 
 	/* for higher loadavg, we are more reluctant */
-
+#if 0
 	/*
 	 * this doesn't work as intended - it is almost always 0, but can
 	 * sometimes, depending on workload, spike very high into the hundreds
 	 * even when the average cpu load is under 10%.
 	 */
-	/* mult += 2 * get_loadavg(); */
+	mult += 2 * get_loadavg();
+#endif
 
 	/* for IO wait tasks (per cpu!) we add 5x each */
 	mult += 10 * nr_iowait_cpu(smp_processor_id());

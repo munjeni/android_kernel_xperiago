@@ -1393,8 +1393,11 @@ static int android_bind_config(struct usb_configuration *c)
 	int ret = 0;
 
 #ifdef CONFIG_USB_OTG_20
-	if (gadget_is_otg(c->cdev->gadget))
-		c->descriptors = otg_desc;
+	if (gadget_is_otg(c->cdev->gadget)) {
+		c->descriptors = (void *)otg_desc;
+		printk(KERN_ALERT "DEBUG: Is otg_desc realy (void *) ??? in "
+				 "function %s on line %d\n",__FUNCTION__,__LINE__);
+	}
 #endif
 
 	ret = android_bind_enabled_functions(dev, c);
